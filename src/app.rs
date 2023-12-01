@@ -1,5 +1,11 @@
 use std::error;
 
+#[derive(Debug)]
+pub enum CurrentFocus {
+    Viewer,
+    Input { insert: bool },
+}
+
 /// Application result type.
 pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 
@@ -8,15 +14,18 @@ pub type AppResult<T> = std::result::Result<T, Box<dyn error::Error>>;
 pub struct App {
     /// Is the application running?
     pub running: bool,
-    /// counter
-    pub counter: u8,
+    pub user_input: String,
+    pub current_focus: CurrentFocus,
+    pub messages: Vec<String>,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
             running: true,
-            counter: 0,
+            user_input: String::new(),
+            current_focus: CurrentFocus::Input { insert: true },
+            messages: Vec::new(),
         }
     }
 }
@@ -35,15 +44,45 @@ impl App {
         self.running = false;
     }
 
-    pub fn increment_counter(&mut self) {
-        if let Some(res) = self.counter.checked_add(1) {
-            self.counter = res;
+    pub fn focus_viewer(&mut self) {
+        match self.current_focus {
+            CurrentFocus::Input { insert } => {
+                if !insert {
+                    self.current_focus = CurrentFocus::Viewer;
+                }
+            }
+            _ => {}
         }
     }
 
-    pub fn decrement_counter(&mut self) {
-        if let Some(res) = self.counter.checked_sub(1) {
-            self.counter = res;
+    pub fn focus_input(&mut self) {
+        self.current_focus = CurrentFocus::Input { insert: false };
+    }
+
+    pub fn enter_input(&mut self) {
+        match self.current_focus {
+            CurrentFocus::Input { insert } => {
+                if !insert {
+                    self.current_focus = CurrentFocus::Input { insert: true };
+                }
+            }
+            _ => {}
         }
+    }
+
+    pub fn exit_input(&mut self) {
+        match self.current_focus {
+            CurrentFocus::Input { insert } => {
+                if insert {
+                    self.current_focus = CurrentFocus::Input { insert: false };
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn send_command(&mut self) {
+        self.messages.push(self.user_input.clone());
+        self.user_input = String::new();
     }
 }

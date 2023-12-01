@@ -1,27 +1,55 @@
-use crate::app::{App, AppResult};
+use crate::app::{App, AppResult, CurrentFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
-    match key_event.code {
-        // Exit application on `ESC` or `q`
-        KeyCode::Esc | KeyCode::Char('q') => {
-            app.quit();
+    match app.current_focus {
+        CurrentFocus::Input { insert } => {
+            if insert {
+                match key_event.code {
+                    KeyCode::Char(value) => {
+                        app.user_input.push(value);
+                    }
+                    KeyCode::Backspace => {
+                        app.user_input.pop();
+                    }
+                    KeyCode::Enter => {
+                        app.send_command();
+                    }
+                    KeyCode::Esc => {
+                        app.exit_input();
+                    }
+                    _ => {}
+                }
+            } else {
+                match key_event.code {
+                    KeyCode::Char('i') => {
+                        app.enter_input();
+                    }
+                    KeyCode::Char('k') => {
+                        app.focus_viewer();
+                    }
+                    _ => {}
+                }
+            }
         }
+        CurrentFocus::Viewer => match key_event.code {
+            KeyCode::Char('j') => {
+                app.focus_input();
+            }
+            _ => {}
+        },
+    }
+
+    // Focus agnostic key bindings
+    match key_event.code {
         // Exit application on `Ctrl-C`
         KeyCode::Char('c') | KeyCode::Char('C') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
                 app.quit();
             }
         }
-        // Counter handlers
-        KeyCode::Right => {
-            app.increment_counter();
-        }
-        KeyCode::Left => {
-            app.decrement_counter();
-        }
-        // Other handlers you could add here.
+
         _ => {}
     }
     Ok(())
