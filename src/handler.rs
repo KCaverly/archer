@@ -2,7 +2,7 @@ use crate::app::{App, AppResult, CurrentFocus};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 /// Handles the key events and updates the state of [`App`].
-pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
+pub async fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match app.current_focus {
         CurrentFocus::Input { insert } => {
             if insert {
@@ -14,7 +14,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                         app.user_input.pop();
                     }
                     KeyCode::Enter => {
-                        app.send_command();
+                        app.send_command().await;
                     }
                     KeyCode::Esc => {
                         app.exit_input();

@@ -2,11 +2,89 @@ use ratatui::{
     layout::Alignment,
     prelude::{Constraint, Direction, Layout},
     style::{Color, Style},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, Paragraph, Wrap},
     Frame,
 };
 
-use crate::app::{App, CurrentFocus};
+use crate::app::{App, CurrentFocus, MessageRole};
+
+const ACTIVE_COLOR: Color = Color::LightBlue;
+const INACTIVE_COLOR: Color = Color::Gray;
+const INPUT_COLOR: Color = Color::Yellow;
+
+pub fn render_user_input(app: &mut App) -> Paragraph {
+    Paragraph::new(app.user_input.as_str())
+        .block(
+            Block::default()
+                .title("Input")
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Thick),
+        )
+        .style(
+            Style::default()
+                .fg(match app.current_focus {
+                    CurrentFocus::Input { insert } => {
+                        if insert {
+                            INPUT_COLOR
+                        } else {
+                            ACTIVE_COLOR
+                        }
+                    }
+                    _ => INACTIVE_COLOR,
+                })
+                .bg(Color::Black),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true })
+}
+
+pub fn render_messages(app: &mut App) -> Paragraph {
+    let mut lines = Vec::new();
+    for message in &app.messages {
+        match message.role {
+            MessageRole::User => {
+                lines.push(Line::from(vec![Span::styled(
+                    "User",
+                    Style::default().fg(Color::Red),
+                )]));
+            }
+            MessageRole::Assistant => {
+                lines.push(Line::from(vec![Span::styled(
+                    "Assistant",
+                    Style::default().fg(Color::Blue),
+                )]));
+            }
+        }
+
+        let content = message.content.clone();
+        lines.push(Line::from(vec![Span::styled(
+            format!("{content}"),
+            Style::default().fg(Color::White),
+        )]))
+    }
+
+    let text = Text::from(lines);
+    Paragraph::new(text)
+        .block(
+            Block::default()
+                .title("Viewer")
+                .title_alignment(Alignment::Left)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Thick)
+                .style(
+                    Style::default()
+                        .fg(match app.current_focus {
+                            CurrentFocus::Viewer => ACTIVE_COLOR,
+                            _ => INACTIVE_COLOR,
+                        })
+                        .bg(Color::Black),
+                ),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true })
+}
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, frame: &mut Frame) {
@@ -20,60 +98,6 @@ pub fn render(app: &mut App, frame: &mut Frame) {
         .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
         .split(frame.size());
 
-    let active_color = Color::Cyan;
-    let inactive_color = Color::LightBlue;
-    let insert_color = Color::Yellow;
-
-    frame.render_widget(
-        Paragraph::new(if let Some(message) = app.messages.get(0) {
-            message.clone()
-        } else {
-            "".to_string()
-        })
-        .block(
-            Block::default()
-                .title("Bond")
-                .title_alignment(Alignment::Left)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Thick),
-        )
-        .style(
-            Style::default()
-                .fg(match app.current_focus {
-                    CurrentFocus::Viewer => active_color,
-                    _ => inactive_color,
-                })
-                .bg(Color::Black),
-        )
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: true }),
-        layout[0],
-    );
-    frame.render_widget(
-        Paragraph::new(app.user_input.as_str())
-            .block(
-                Block::default()
-                    .title("Bond")
-                    .title_alignment(Alignment::Left)
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Thick),
-            )
-            .style(
-                Style::default()
-                    .fg(match app.current_focus {
-                        CurrentFocus::Input { insert } => {
-                            if insert {
-                                insert_color
-                            } else {
-                                active_color
-                            }
-                        }
-                        _ => inactive_color,
-                    })
-                    .bg(Color::Black),
-            )
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true }),
-        layout[1],
-    );
+    frame.render_widget(render_messages(app), layout[0]);
+    frame.render_widget(render_user_input(app), layout[1]);
 }

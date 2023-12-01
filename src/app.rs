@@ -1,9 +1,23 @@
 use std::error;
 
+use crate::agent::get_response;
+
 #[derive(Debug)]
 pub enum CurrentFocus {
     Viewer,
     Input { insert: bool },
+}
+
+#[derive(Debug)]
+pub enum MessageRole {
+    User,
+    Assistant,
+}
+
+#[derive(Debug)]
+pub struct Message {
+    pub role: MessageRole,
+    pub content: String,
 }
 
 /// Application result type.
@@ -16,7 +30,7 @@ pub struct App {
     pub running: bool,
     pub user_input: String,
     pub current_focus: CurrentFocus,
-    pub messages: Vec<String>,
+    pub messages: Vec<Message>,
 }
 
 impl Default for App {
@@ -81,8 +95,21 @@ impl App {
         }
     }
 
-    pub fn send_command(&mut self) {
-        self.messages.push(self.user_input.clone());
+    pub async fn send_command(&mut self) {
+        let prompt = self.user_input.clone();
+
+        self.messages.push(Message {
+            role: MessageRole::User,
+            content: prompt.clone(),
+        });
+
+        let output = get_response(&prompt).await.unwrap();
+
+        self.messages.push(Message {
+            role: MessageRole::Assistant,
+            content: output,
+        });
+
         self.user_input = String::new();
     }
 }
