@@ -1,10 +1,10 @@
 [package]
-name = "ratatui-async-template"
+name = "bond"
 version = "0.1.0"
 edition = "2021"
 description = "An async terminal interface for interacting with multi-stage LLM agents."
 
-authors = ["KCaverly <kylebcaverly@gmail.com>"]
+authors = ["KCaverly"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

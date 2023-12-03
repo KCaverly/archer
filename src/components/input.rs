@@ -78,6 +78,7 @@ impl Component for MessageInput<'static> {
                         role: Role::User,
                         content: self.current_input.clone(),
                     });
+                    self.display_spans = Vec::new();
                     self.current_input = String::new();
                     return Ok(Some(action));
                 }
