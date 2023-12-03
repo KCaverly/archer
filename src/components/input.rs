@@ -13,15 +13,17 @@ use crate::{action::Action, tui::Frame};
 use async_channel::Sender;
 
 #[derive(Default)]
-pub struct MessageInput {
+pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
     active: bool,
     focused: bool,
     current_input: String,
+    display_spans: Vec<Span<'a>>,
+    slash_command: bool,
 }
 
-impl MessageInput {
+impl MessageInput<'static> {
     pub fn new(focused: bool) -> Self {
         Self {
             focused,
@@ -30,7 +32,7 @@ impl MessageInput {
     }
 }
 
-impl Component for MessageInput {
+impl Component for MessageInput<'static> {
     fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())
@@ -45,9 +47,30 @@ impl Component for MessageInput {
         if self.active {
             match key.code {
                 KeyCode::Char(c) => {
+                    if (c == '/' && self.current_input == String::new())
+                        || (self.slash_command && c != ' ')
+                    {
+                        self.slash_command = true;
+                        self.display_spans.push(Span::styled(
+                            c.to_string(),
+                            Style::default().fg(Color::Magenta),
+                        ));
+                    } else if c == ' ' {
+                        self.slash_command = false;
+                        self.display_spans.push(Span::styled(
+                            c.to_string(),
+                            Style::default().fg(Color::White),
+                        ));
+                    } else {
+                        self.display_spans.push(Span::styled(
+                            c.to_string(),
+                            Style::default().fg(Color::White),
+                        ));
+                    }
                     self.current_input.push(c);
                 }
                 KeyCode::Backspace => {
+                    self.display_spans.pop();
                     self.current_input.pop();
                 }
                 KeyCode::Enter => {
@@ -89,7 +112,8 @@ impl Component for MessageInput {
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
             .split(rect);
 
-        let paragraph = Paragraph::new(self.current_input.clone())
+        let text = Text::from(Line::from(self.display_spans.clone()));
+        let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
                     .title("Input")
