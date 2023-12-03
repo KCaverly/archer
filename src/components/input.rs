@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use color_eyre::eyre::Result;
+use crossterm::event::KeyCode;
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -15,6 +16,7 @@ pub struct MessageInput {
     config: Config,
     active: bool,
     focused: bool,
+    current_input: String,
 }
 
 impl MessageInput {
@@ -35,6 +37,27 @@ impl Component for MessageInput {
     fn register_config_handler(&mut self, config: Config) -> Result<()> {
         self.config = config;
         Ok(())
+    }
+
+    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
+        if self.active {
+            match key.code {
+                KeyCode::Char(c) => {
+                    self.current_input.push(c);
+                }
+                KeyCode::Backspace => {
+                    self.current_input.pop();
+                }
+                KeyCode::Enter => {
+                    let action = Action::SendMessage(self.current_input.clone());
+                    self.current_input = String::new();
+                    return Ok(Some(action));
+                }
+                _ => {}
+            }
+        }
+
+        Ok(None)
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -61,7 +84,7 @@ impl Component for MessageInput {
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
             .split(rect);
 
-        let paragraph = Paragraph::new("")
+        let paragraph = Paragraph::new(self.current_input.clone())
             .block(
                 Block::default()
                     .title("Input")

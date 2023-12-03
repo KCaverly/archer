@@ -15,6 +15,7 @@ pub struct Viewer {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     focused: bool,
+    messages: Vec<String>,
 }
 
 impl Viewer {
@@ -45,6 +46,9 @@ impl Component for Viewer {
             Action::FocusViewer => {
                 self.focused = true;
             }
+            Action::SendMessage(message) => {
+                self.messages.push(message);
+            }
             _ => {}
         }
         Ok(None)
@@ -56,7 +60,20 @@ impl Component for Viewer {
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
             .split(rect);
 
-        let paragraph = Paragraph::new("")
+        let mut lines = Vec::new();
+        for message in &self.messages {
+            lines.push(Line::from(vec![Span::styled(
+                "User",
+                Style::default().fg(Color::Red),
+            )]));
+            lines.push(Line::from(vec![Span::styled(
+                message,
+                Style::default().fg(Color::White),
+            )]));
+        }
+
+        let text = Text::from(lines);
+        let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
                     .title("Viewer")

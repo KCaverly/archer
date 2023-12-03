@@ -20,6 +20,7 @@ pub enum Action {
     FocusInput,
     ActivateInput,
     DeactivateInput,
+    SendMessage(String),
 }
 
 impl<'de> Deserialize<'de> for Action {
