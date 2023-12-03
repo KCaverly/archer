@@ -5,6 +5,8 @@ use serde::{
     Deserialize, Serialize,
 };
 
+use crate::agent::message::Message;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {
     Tick,
@@ -20,8 +22,8 @@ pub enum Action {
     FocusInput,
     ActivateInput,
     DeactivateInput,
-    SendMessage(String),
-    ReceiveMessage(String),
+    SendMessage(Message),
+    ReceiveMessage(Message),
 }
 
 impl<'de> Deserialize<'de> for Action {

@@ -4,7 +4,10 @@ use color_eyre::eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 
 use super::Component;
-use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
+use crate::agent::message::{Message, Role};
+use crate::styles::{
+    ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
+};
 use crate::{action::Action, tui::Frame};
 use async_channel::Sender;
 
@@ -15,7 +18,7 @@ pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
     focused: bool,
-    messages: Vec<String>,
+    messages: Vec<Message>,
 }
 
 impl Viewer {
@@ -60,14 +63,26 @@ impl Component for Viewer {
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
             .split(rect);
 
+        // Render Messages
         let mut lines = Vec::new();
         for message in &self.messages {
+            match message.role {
+                Role::System => lines.push(Line::from(vec![Span::styled(
+                    "System",
+                    Style::default().fg(SYSTEM_COLOR),
+                )])),
+                Role::User => lines.push(Line::from(vec![Span::styled(
+                    "User",
+                    Style::default().fg(USER_COLOR),
+                )])),
+                Role::Assistant => lines.push(Line::from(vec![Span::styled(
+                    "Assistant",
+                    Style::default().fg(ASSISTANT_COLOR),
+                )])),
+            }
+
             lines.push(Line::from(vec![Span::styled(
-                "User",
-                Style::default().fg(Color::Red),
-            )]));
-            lines.push(Line::from(vec![Span::styled(
-                message,
+                message.content.clone(),
                 Style::default().fg(Color::White),
             )]));
         }

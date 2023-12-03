@@ -6,6 +6,7 @@ use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
+use crate::agent::message::{Message, Role};
 use crate::config::{Config, KeyBindings};
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
@@ -50,7 +51,10 @@ impl Component for MessageInput {
                     self.current_input.pop();
                 }
                 KeyCode::Enter => {
-                    let action = Action::SendMessage(self.current_input.clone());
+                    let action = Action::SendMessage(Message {
+                        role: Role::User,
+                        content: self.current_input.clone(),
+                    });
                     self.current_input = String::new();
                     return Ok(Some(action));
                 }

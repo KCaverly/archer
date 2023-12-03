@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     action::Action,
+    agent::message::{Message, Role},
     components::{input::MessageInput, viewer::Viewer, Component},
     config::Config,
     mode::Mode,
@@ -156,8 +157,16 @@ impl App {
                         let action_tx = action_tx.clone();
                         tokio::spawn(async move {
                             action_tx
-                                .send(Action::ReceiveMessage(format!("RECEIVED: {message}")))
-                                .await
+                                .send(Action::ReceiveMessage(message.clone()))
+                                .await;
+
+                            tokio::time::sleep(tokio::time::Duration::from_millis(750)).await;
+                            action_tx
+                                .send(Action::ReceiveMessage(Message {
+                                    role: Role::Assistant,
+                                    content: message.content.clone(),
+                                }))
+                                .await;
                         });
                     }
                     _ => {}
