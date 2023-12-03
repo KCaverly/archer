@@ -1,0 +1,36 @@
+{
+  "keybindings": {
+    "Viewer": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+        
+        // Action Keybindings
+        "<j>": "FocusInput",
+      },
+    "Input": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+        
+        // Action Keybindings
+        "<k>": "FocusViewer",
+        "<i>": "ActivateInput",
+      },
+    "ActiveInput": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+
+        // Action Keybindings
+        "<ESC>": "DeactivateInput",
+
+      }
+  }
+}
