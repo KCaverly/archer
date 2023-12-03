@@ -42,7 +42,7 @@ impl App {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+        let (action_tx, mut action_rx) = async_channel::unbounded();
 
         let mut tui = tui::Tui::new()?
             .tick_rate(self.tick_rate)
@@ -65,15 +65,15 @@ impl App {
         loop {
             if let Some(e) = tui.next().await {
                 match e {
-                    tui::Event::Quit => action_tx.send(Action::Quit)?,
-                    tui::Event::Tick => action_tx.send(Action::Tick)?,
-                    tui::Event::Render => action_tx.send(Action::Render)?,
-                    tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
+                    tui::Event::Quit => action_tx.send(Action::Quit).await?,
+                    tui::Event::Tick => action_tx.send(Action::Tick).await?,
+                    tui::Event::Render => action_tx.send(Action::Render).await?,
+                    tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y)).await?,
                     tui::Event::Key(key) => {
                         if let Some(keymap) = self.config.keybindings.get(&self.mode) {
                             if let Some(action) = keymap.get(&vec![key]) {
                                 log::info!("Got action: {action:?}");
-                                action_tx.send(action.clone())?;
+                                action_tx.send(action.clone()).await?;
                             } else {
                                 // If the key was not handled as a single key action,
                                 // then consider it for multi-key combinations.
@@ -82,7 +82,7 @@ impl App {
                                 // Check for multi-key combinations
                                 if let Some(action) = keymap.get(&self.last_tick_key_events) {
                                     log::info!("Got action: {action:?}");
-                                    action_tx.send(action.clone())?;
+                                    action_tx.send(action.clone()).await?;
                                 }
                             }
                         };
@@ -91,7 +91,7 @@ impl App {
                 }
                 for component in self.components.iter_mut() {
                     if let Some(action) = component.handle_events(Some(e.clone()))? {
-                        action_tx.send(action)?;
+                        action_tx.send(action).await?;
                     }
                 }
             }
@@ -100,7 +100,7 @@ impl App {
                 if action != Action::Tick && action != Action::Render {
                     log::debug!("{action:?}");
                 }
-                match action {
+                match action.clone() {
                     Action::Tick => {
                         self.last_tick_key_events.drain(..);
                     }
@@ -113,9 +113,13 @@ impl App {
                             for component in self.components.iter_mut() {
                                 let r = component.draw(f, f.size());
                                 if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .unwrap();
+                                    let action_tx = action_tx.clone();
+                                    tokio::spawn(async move {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {:?}", e)))
+                                            .await
+                                            .unwrap();
+                                    });
                                 }
                             }
                         })?;
@@ -125,9 +129,13 @@ impl App {
                             for component in self.components.iter_mut() {
                                 let r = component.draw(f, f.size());
                                 if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .unwrap();
+                                    let action_tx = action_tx.clone();
+                                    tokio::spawn(async move {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {:?}", e)))
+                                            .await
+                                            .unwrap();
+                                    });
                                 }
                             }
                         })?;
@@ -144,17 +152,25 @@ impl App {
                     Action::DeactivateInput => {
                         self.mode = Mode::Input;
                     }
+                    Action::SendMessage(message) => {
+                        let action_tx = action_tx.clone();
+                        tokio::spawn(async move {
+                            action_tx
+                                .send(Action::ReceiveMessage(format!("RECEIVED: {message}")))
+                                .await
+                        });
+                    }
                     _ => {}
                 }
                 for component in self.components.iter_mut() {
                     if let Some(action) = component.update(action.clone())? {
-                        action_tx.send(action)?
+                        action_tx.send(action).await?
                     };
                 }
             }
             if self.should_suspend {
                 tui.suspend()?;
-                action_tx.send(Action::Resume)?;
+                action_tx.send(Action::Resume).await?;
                 tui = tui::Tui::new()?
                     .tick_rate(self.tick_rate)
                     .frame_rate(self.frame_rate);

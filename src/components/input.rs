@@ -9,10 +9,11 @@ use super::Component;
 use crate::config::{Config, KeyBindings};
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
+use async_channel::Sender;
 
 #[derive(Default)]
 pub struct MessageInput {
-    command_tx: Option<UnboundedSender<Action>>,
+    command_tx: Option<Sender<Action>>,
     config: Config,
     active: bool,
     focused: bool,
@@ -29,7 +30,7 @@ impl MessageInput {
 }
 
 impl Component for MessageInput {
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())
     }

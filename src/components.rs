@@ -1,7 +1,7 @@
+use async_channel::Sender;
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     action::Action,
@@ -26,7 +26,7 @@ pub trait Component {
     ///
     /// * `Result<()>` - An Ok result or an error.
     #[allow(unused_variables)]
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
         Ok(())
     }
     /// Register a configuration handler that provides configuration settings if necessary.

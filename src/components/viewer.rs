@@ -6,13 +6,13 @@ use ratatui::{prelude::*, widgets::*};
 use super::Component;
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
-use tokio::sync::mpsc::UnboundedSender;
+use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};
 
 #[derive(Default)]
 pub struct Viewer {
-    command_tx: Option<UnboundedSender<Action>>,
+    command_tx: Option<Sender<Action>>,
     config: Config,
     focused: bool,
     messages: Vec<String>,
@@ -28,7 +28,7 @@ impl Viewer {
 }
 
 impl Component for Viewer {
-    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())
     }
@@ -46,7 +46,7 @@ impl Component for Viewer {
             Action::FocusViewer => {
                 self.focused = true;
             }
-            Action::SendMessage(message) => {
+            Action::ReceiveMessage(message) => {
                 self.messages.push(message);
             }
             _ => {}
