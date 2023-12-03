@@ -6,7 +6,10 @@ use tokio::sync::mpsc;
 
 use crate::{
     action::Action,
-    agent::message::{Message, Role},
+    agent::{
+        completion::{get_completion, CompletionModel},
+        message::{Message, Role},
+    },
     components::{input::MessageInput, viewer::Viewer, Component},
     config::Config,
     mode::Mode,
@@ -22,6 +25,7 @@ pub struct App {
     pub should_suspend: bool,
     pub mode: Mode,
     pub last_tick_key_events: Vec<KeyEvent>,
+    pub messages: Vec<Message>,
 }
 
 impl App {
@@ -39,6 +43,7 @@ impl App {
             config,
             mode,
             last_tick_key_events: Vec::new(),
+            messages: Vec::new(),
         })
     }
 
@@ -154,20 +159,26 @@ impl App {
                         self.mode = Mode::Input;
                     }
                     Action::SendMessage(message) => {
+                        // Lets clean this up at some point
+                        // I don't think this cloning is ideal
                         let action_tx = action_tx.clone();
+                        let mut messages = self.messages.clone();
                         tokio::spawn(async move {
                             action_tx
                                 .send(Action::ReceiveMessage(message.clone()))
-                                .await;
+                                .await
+                                .ok();
 
-                            tokio::time::sleep(tokio::time::Duration::from_millis(750)).await;
-                            action_tx
-                                .send(Action::ReceiveMessage(Message {
-                                    role: Role::Assistant,
-                                    content: message.content.clone(),
-                                }))
-                                .await;
+                            messages.push(message);
+                            if let Some(output) =
+                                get_completion(CompletionModel::Yi34B, messages).await.ok()
+                            {
+                                action_tx.send(Action::ReceiveMessage(output)).await.ok();
+                            }
                         });
+                    }
+                    Action::ReceiveMessage(message) => {
+                        self.messages.push(message);
                     }
                     _ => {}
                 }
