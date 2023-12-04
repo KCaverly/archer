@@ -53,7 +53,7 @@ impl Component for MessageInput<'static> {
                         self.slash_command = true;
                         self.display_spans.push(Span::styled(
                             c.to_string(),
-                            Style::default().fg(Color::Magenta),
+                            Style::default().fg(Color::Cyan).bold(),
                         ));
                     } else if c == ' ' {
                         self.slash_command = false;

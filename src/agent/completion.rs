@@ -1,5 +1,9 @@
+use bytes::Bytes;
+
 use crate::agent::message::{Message, Role};
 use anyhow::anyhow;
+use eventsource_stream::EventStream;
+use futures::stream;
 use replicate_rs::config::ReplicateConfig;
 use replicate_rs::predictions::{PredictionClient, PredictionStatus};
 use serde_json::json;
@@ -49,6 +53,7 @@ pub async fn get_completion(
             model_details.0.as_str(),
             model_details.1.as_str(),
             json!({"prompt": prompt, "prompt_template": "{prompt}"}),
+            false,
         )
         .await?;
 
@@ -78,4 +83,43 @@ pub async fn get_completion(
         prediction.reload().await.unwrap();
         tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
     }
+}
+
+pub async fn stream_completion(
+    model: CompletionModel,
+    messages: Vec<Message>,
+) -> anyhow::Result<EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>> {
+    // Generate Prompt
+    let mut prompt = String::new();
+    for message in messages {
+        let content = message.content;
+        match message.role {
+            Role::System => {
+                prompt.push_str(format!("\n<|im_start|>system\n{content}<|im_end|>").as_str());
+            }
+            Role::User => {
+                prompt.push_str(format!("\n<|im_start|>user\n{content}<|im_end|>").as_str());
+            }
+            Role::Assistant => {
+                prompt.push_str(format!("\n<|im_start|>assistant\n{content}<|im_end|>").as_str());
+            }
+        }
+    }
+
+    prompt.push_str("<|im_start|>assistant");
+
+    let model_details = model.get_model_details();
+    let config = ReplicateConfig::new()?;
+    let client = PredictionClient::from(config);
+
+    let mut prediction = client
+        .create(
+            model_details.0.as_str(),
+            model_details.1.as_str(),
+            json!({"prompt": prompt, "prompt_template": "{prompt}"}),
+            true,
+        )
+        .await?;
+
+    prediction.get_stream().await
 }

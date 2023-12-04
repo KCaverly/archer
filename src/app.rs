@@ -1,5 +1,7 @@
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -7,7 +9,7 @@ use tokio::sync::mpsc;
 use crate::{
     action::Action,
     agent::{
-        completion::{get_completion, CompletionModel},
+        completion::{get_completion, stream_completion, CompletionModel},
         message::{Message, Role},
     },
     components::{input::MessageInput, viewer::Viewer, Component},
@@ -169,11 +171,43 @@ impl App {
                                 .await
                                 .ok();
 
+                            let mut content = String::new();
+                            action_tx
+                                .send(Action::ReceiveMessage(Message {
+                                    role: Role::Assistant,
+                                    content: content.clone(),
+                                }))
+                                .await
+                                .ok();
+
                             messages.push(message);
-                            if let Some(output) =
-                                get_completion(CompletionModel::Yi34B, messages).await.ok()
+                            if let Some(mut stream) =
+                                stream_completion(CompletionModel::Yi34B, messages)
+                                    .await
+                                    .ok()
                             {
-                                action_tx.send(Action::ReceiveMessage(output)).await.ok();
+                                while let Some(event) = stream.next().await {
+                                    match event {
+                                        Ok(event) => {
+                                            if event.event == "done" {
+                                                break;
+                                            }
+                                            content.push_str(event.data.as_str());
+                                            action_tx
+                                                .send(Action::StreamMessage(Message {
+                                                    role: Role::Assistant,
+                                                    content: content.clone(),
+                                                }))
+                                                .await
+                                                .ok();
+                                        }
+                                        Err(err) => {
+                                            panic!("{:?}", err);
+                                        }
+                                    }
+                                }
+                            } else {
+                                panic!("STREAMING IS FAILING!");
                             }
                         });
                     }

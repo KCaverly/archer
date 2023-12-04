@@ -52,6 +52,11 @@ impl Component for Viewer {
             Action::ReceiveMessage(message) => {
                 self.messages.push(message);
             }
+            Action::StreamMessage(message) => {
+                // Simply replace the last message
+                self.messages.pop();
+                self.messages.push(message);
+            }
             _ => {}
         }
         Ok(None)

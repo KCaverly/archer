@@ -24,6 +24,7 @@ pub enum Action {
     DeactivateInput,
     SendMessage(Message),
     ReceiveMessage(Message),
+    StreamMessage(Message),
 }
 
 impl<'de> Deserialize<'de> for Action {
