@@ -3,6 +3,7 @@ use crossterm::event::KeyEvent;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use ratatui::prelude::Rect;
+use replicate_rs::predictions::PredictionStatus;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
@@ -163,6 +164,7 @@ impl App {
                     Action::SendMessage(message) => {
                         // Lets clean this up at some point
                         // I don't think this cloning is ideal
+                        let model = message.model.clone();
                         let action_tx = action_tx.clone();
                         let mut messages = self.messages.clone();
                         tokio::spawn(async move {
@@ -171,43 +173,49 @@ impl App {
                                 .await
                                 .ok();
 
-                            let mut content = String::new();
-                            action_tx
-                                .send(Action::ReceiveMessage(Message {
-                                    role: Role::Assistant,
-                                    content: content.clone(),
-                                }))
-                                .await
-                                .ok();
+                            if let Some(model) = model {
+                                let mut content = String::new();
 
-                            messages.push(message);
+                                action_tx
+                                    .send(Action::ReceiveMessage(Message {
+                                        role: Role::Assistant,
+                                        content: content.clone(),
+                                        status: Some(PredictionStatus::Starting),
+                                        model: Some(model.clone()),
+                                    }))
+                                    .await
+                                    .ok();
+                                messages.push(message);
 
-                            let stream = stream_completion(CompletionModel::Yi34B, messages).await;
-                            match stream {
-                                Ok(mut stream) => {
-                                    while let Some(event) = stream.next().await {
-                                        match event {
-                                            Ok(event) => {
-                                                if event.event == "done" {
-                                                    break;
+                                let stream = stream_completion(&model, messages).await;
+                                match stream {
+                                    Ok((status, mut stream)) => {
+                                        while let Some(event) = stream.next().await {
+                                            match event {
+                                                Ok(event) => {
+                                                    if event.event == "done" {
+                                                        break;
+                                                    }
+                                                    content.push_str(event.data.as_str());
+                                                    action_tx
+                                                        .send(Action::StreamMessage(Message {
+                                                            role: Role::Assistant,
+                                                            content: content.clone(),
+                                                            status: None,
+                                                            model: Some(model.clone()),
+                                                        }))
+                                                        .await
+                                                        .ok();
                                                 }
-                                                content.push_str(event.data.as_str());
-                                                action_tx
-                                                    .send(Action::StreamMessage(Message {
-                                                        role: Role::Assistant,
-                                                        content: content.clone(),
-                                                    }))
-                                                    .await
-                                                    .ok();
-                                            }
-                                            Err(err) => {
-                                                panic!("{:?}", err);
+                                                Err(err) => {
+                                                    panic!("{:?}", err);
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                Err(err) => {
-                                    panic!("{err}");
+                                    Err(err) => {
+                                        panic!("{err}");
+                                    }
                                 }
                             }
                         });

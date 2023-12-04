@@ -1,7 +1,9 @@
+use std::fmt;
 use std::time::Instant;
 
 use color_eyre::eyre::Result;
 use ratatui::{prelude::*, widgets::*};
+use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
 use crate::agent::message::{Message, Role};
@@ -74,16 +76,29 @@ impl Component for Viewer {
             match message.role {
                 Role::System => lines.push(Line::from(vec![Span::styled(
                     "System",
-                    Style::default().fg(SYSTEM_COLOR),
+                    Style::default().fg(SYSTEM_COLOR).bold(),
                 )])),
                 Role::User => lines.push(Line::from(vec![Span::styled(
                     "User",
-                    Style::default().fg(USER_COLOR),
+                    Style::default().fg(USER_COLOR).bold(),
                 )])),
-                Role::Assistant => lines.push(Line::from(vec![Span::styled(
-                    "Assistant",
-                    Style::default().fg(ASSISTANT_COLOR),
-                )])),
+                Role::Assistant => {
+                    let mut spans = Vec::new();
+                    spans.push(Span::styled(
+                        "Assistant",
+                        Style::default().fg(ASSISTANT_COLOR).bold(),
+                    ));
+
+                    if let Some(model) = &message.model {
+                        let (owner, model_name) = model.get_model_details();
+                        spans.push(Span::styled(
+                            format!(": ({owner}/{model_name})"),
+                            Style::default().fg(ASSISTANT_COLOR),
+                        ));
+                    }
+
+                    lines.push(Line::from(spans));
+                }
             }
 
             lines.push(Line::from(vec![Span::styled(

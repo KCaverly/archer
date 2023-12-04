@@ -5,7 +5,7 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::agent::message::Message;
+use crate::agent::{completion::CompletionModel, message::Message};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {

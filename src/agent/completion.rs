@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use serde::Serialize;
 
 use crate::agent::message::{Message, Role};
 use anyhow::anyhow;
@@ -8,6 +9,7 @@ use replicate_rs::config::ReplicateConfig;
 use replicate_rs::predictions::{PredictionClient, PredictionStatus};
 use serde_json::json;
 
+#[derive(Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     Yi34B,
 }
@@ -70,6 +72,8 @@ pub async fn get_completion(
                     return anyhow::Ok(Message {
                         role: Role::Assistant,
                         content,
+                        status: None,
+                        model: Some(model),
                     });
                 } else {
                     panic!("output error");
@@ -86,9 +90,12 @@ pub async fn get_completion(
 }
 
 pub async fn stream_completion(
-    model: CompletionModel,
+    model: &CompletionModel,
     messages: Vec<Message>,
-) -> anyhow::Result<EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>> {
+) -> anyhow::Result<(
+    PredictionStatus,
+    EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>,
+)> {
     // Generate Prompt
     let mut prompt = String::new();
     for message in messages {
@@ -121,5 +128,7 @@ pub async fn stream_completion(
         )
         .await?;
 
-    prediction.get_stream().await
+    let stream = prediction.get_stream().await?;
+    let status = prediction.status;
+    anyhow::Ok((status, stream))
 }

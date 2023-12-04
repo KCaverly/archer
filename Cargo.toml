@@ -34,7 +34,7 @@ tracing = "0.1.37"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "serde"] }
 async-channel = "2.1.1"
-replicate-rs = "0.8.1"
+replicate-rs = "0.8.4"
 anyhow = "1.0.75"
 reqwest = {version = "0.11.22", features = ["stream"]}
 eventsource-stream = "0.2.3"
