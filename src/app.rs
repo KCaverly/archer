@@ -181,33 +181,34 @@ impl App {
                                 .ok();
 
                             messages.push(message);
-                            if let Some(mut stream) =
-                                stream_completion(CompletionModel::Yi34B, messages)
-                                    .await
-                                    .ok()
-                            {
-                                while let Some(event) = stream.next().await {
-                                    match event {
-                                        Ok(event) => {
-                                            if event.event == "done" {
-                                                break;
+
+                            let stream = stream_completion(CompletionModel::Yi34B, messages).await;
+                            match stream {
+                                Ok(mut stream) => {
+                                    while let Some(event) = stream.next().await {
+                                        match event {
+                                            Ok(event) => {
+                                                if event.event == "done" {
+                                                    break;
+                                                }
+                                                content.push_str(event.data.as_str());
+                                                action_tx
+                                                    .send(Action::StreamMessage(Message {
+                                                        role: Role::Assistant,
+                                                        content: content.clone(),
+                                                    }))
+                                                    .await
+                                                    .ok();
                                             }
-                                            content.push_str(event.data.as_str());
-                                            action_tx
-                                                .send(Action::StreamMessage(Message {
-                                                    role: Role::Assistant,
-                                                    content: content.clone(),
-                                                }))
-                                                .await
-                                                .ok();
-                                        }
-                                        Err(err) => {
-                                            panic!("{:?}", err);
+                                            Err(err) => {
+                                                panic!("{:?}", err);
+                                            }
                                         }
                                     }
                                 }
-                            } else {
-                                panic!("STREAMING IS FAILING!");
+                                Err(err) => {
+                                    panic!("{err}");
+                                }
                             }
                         });
                     }
