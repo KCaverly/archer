@@ -39,3 +39,4 @@ anyhow = "1.0.75"
 reqwest = {version = "0.11.22", features = ["stream"]}
 eventsource-stream = "0.2.3"
 bytes = "1.5.0"
+textwrap = "0.16.0"

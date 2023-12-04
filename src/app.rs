@@ -11,6 +11,7 @@ use crate::{
     action::Action,
     agent::{
         completion::{get_completion, stream_completion, CompletionModel},
+        conversation::Conversation,
         message::{Message, Role},
     },
     components::{input::MessageInput, viewer::Viewer, Component},
@@ -28,7 +29,6 @@ pub struct App {
     pub should_suspend: bool,
     pub mode: Mode,
     pub last_tick_key_events: Vec<KeyEvent>,
-    pub messages: Vec<Message>,
 }
 
 impl App {
@@ -46,7 +46,6 @@ impl App {
             config,
             mode,
             last_tick_key_events: Vec::new(),
-            messages: Vec::new(),
         })
     }
 
@@ -160,68 +159,6 @@ impl App {
                     }
                     Action::DeactivateInput => {
                         self.mode = Mode::Input;
-                    }
-                    Action::SendMessage(message) => {
-                        // Lets clean this up at some point
-                        // I don't think this cloning is ideal
-                        let model = message.model.clone();
-                        let action_tx = action_tx.clone();
-                        let mut messages = self.messages.clone();
-                        tokio::spawn(async move {
-                            action_tx
-                                .send(Action::ReceiveMessage(message.clone()))
-                                .await
-                                .ok();
-
-                            if let Some(model) = model {
-                                let mut content = String::new();
-
-                                action_tx
-                                    .send(Action::ReceiveMessage(Message {
-                                        role: Role::Assistant,
-                                        content: content.clone(),
-                                        status: Some(PredictionStatus::Starting),
-                                        model: Some(model.clone()),
-                                    }))
-                                    .await
-                                    .ok();
-                                messages.push(message);
-
-                                let stream = stream_completion(&model, messages).await;
-                                match stream {
-                                    Ok((status, mut stream)) => {
-                                        while let Some(event) = stream.next().await {
-                                            match event {
-                                                Ok(event) => {
-                                                    if event.event == "done" {
-                                                        break;
-                                                    }
-                                                    content.push_str(event.data.as_str());
-                                                    action_tx
-                                                        .send(Action::StreamMessage(Message {
-                                                            role: Role::Assistant,
-                                                            content: content.clone(),
-                                                            status: None,
-                                                            model: Some(model.clone()),
-                                                        }))
-                                                        .await
-                                                        .ok();
-                                                }
-                                                Err(err) => {
-                                                    panic!("{:?}", err);
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Err(err) => {
-                                        panic!("{err}");
-                                    }
-                                }
-                            }
-                        });
-                    }
-                    Action::ReceiveMessage(message) => {
-                        self.messages.push(message);
                     }
                     _ => {}
                 }

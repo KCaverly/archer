@@ -1,11 +1,18 @@
+use futures::StreamExt;
 use std::fmt;
+use std::str::from_utf8;
 use std::time::Instant;
+use textwrap::core::Word;
+use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
+use textwrap::WordSeparator;
 
 use color_eyre::eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
+use crate::agent::completion::stream_completion;
+use crate::agent::conversation::Conversation;
 use crate::agent::message::{Message, Role};
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
@@ -20,7 +27,7 @@ pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
     focused: bool,
-    messages: Vec<Message>,
+    conversation: Conversation,
 }
 
 impl Viewer {
@@ -52,12 +59,70 @@ impl Component for Viewer {
                 self.focused = true;
             }
             Action::ReceiveMessage(message) => {
-                self.messages.push(message);
+                self.conversation.add_message(message);
             }
             Action::StreamMessage(message) => {
                 // Simply replace the last message
-                self.messages.pop();
-                self.messages.push(message);
+                self.conversation.replace_last_message(message);
+            }
+            Action::SendMessage(message) => {
+                // Lets clean this up at some point
+                // I don't think this cloning is ideal
+                let model = message.model.clone();
+                let action_tx = self.command_tx.clone().unwrap();
+                let mut messages = self.conversation.messages.clone();
+                tokio::spawn(async move {
+                    action_tx
+                        .send(Action::ReceiveMessage(message.clone()))
+                        .await
+                        .ok();
+
+                    if let Some(model) = model {
+                        let mut content = String::new();
+
+                        action_tx
+                            .send(Action::ReceiveMessage(Message {
+                                role: Role::Assistant,
+                                content: content.clone(),
+                                status: Some(PredictionStatus::Starting),
+                                model: Some(model.clone()),
+                            }))
+                            .await
+                            .ok();
+                        messages.push(message);
+
+                        let stream = stream_completion(&model, messages).await;
+                        match stream {
+                            Ok((status, mut stream)) => {
+                                while let Some(event) = stream.next().await {
+                                    match event {
+                                        Ok(event) => {
+                                            if event.event == "done" {
+                                                break;
+                                            }
+                                            content.push_str(event.data.as_str());
+                                            action_tx
+                                                .send(Action::StreamMessage(Message {
+                                                    role: Role::Assistant,
+                                                    content: content.clone(),
+                                                    status: None,
+                                                    model: Some(model.clone()),
+                                                }))
+                                                .await
+                                                .ok();
+                                        }
+                                        Err(err) => {
+                                            panic!("{:?}", err);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                panic!("{err}");
+                            }
+                        }
+                    }
+                });
             }
             _ => {}
         }
@@ -71,14 +136,15 @@ impl Component for Viewer {
             .split(rect);
 
         // Render Messages
-        let mut lines = Vec::new();
-        for message in &self.messages {
+        let mut message_items = Vec::new();
+        for message in &self.conversation.messages {
+            let mut message_lines = Vec::new();
             match message.role {
-                Role::System => lines.push(Line::from(vec![Span::styled(
+                Role::System => message_lines.push(Line::from(vec![Span::styled(
                     "System",
                     Style::default().fg(SYSTEM_COLOR).bold(),
                 )])),
-                Role::User => lines.push(Line::from(vec![Span::styled(
+                Role::User => message_lines.push(Line::from(vec![Span::styled(
                     "User",
                     Style::default().fg(USER_COLOR).bold(),
                 )])),
@@ -97,39 +163,68 @@ impl Component for Viewer {
                         ));
                     }
 
-                    lines.push(Line::from(spans));
+                    message_lines.push(Line::from(spans));
                 }
             }
 
             for line in message.content.split("\n") {
-                lines.push(Line::from(vec![Span::styled(
-                    line,
-                    Style::default().fg(Color::White),
-                )]));
+                let words = WordSeparator::AsciiSpace
+                    .find_words(line)
+                    .collect::<Vec<_>>();
+                let subs = lines_to_strings(
+                    wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
+                        .unwrap(),
+                );
+
+                for sub in subs {
+                    message_lines.push(Line::from(vec![Span::styled(
+                        sub,
+                        Style::default().fg(Color::White),
+                    )]));
+                }
             }
+
+            message_items.push(ListItem::new(Text::from(message_lines)));
         }
 
-        let text = Text::from(lines);
-        let paragraph = Paragraph::new(text)
+        let vertical_scroll = 0;
+        let list = List::new(message_items)
             .block(
                 Block::default()
-                    .title("Viewer")
-                    .title_alignment(Alignment::Left)
+                    .title("Conversation")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
-                    .style(
-                        Style::default()
-                            .fg(if self.focused {
-                                FOCUSED_COLOR
-                            } else {
-                                UNFOCUSED_COLOR
-                            })
-                            .bg(Color::Black),
-                    ),
+                    .style(Style::default().fg(if self.focused {
+                        FOCUSED_COLOR
+                    } else {
+                        UNFOCUSED_COLOR
+                    }))
+                    .bg(Color::Black),
             )
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true });
-        f.render_widget(paragraph, layout[0]);
+            .highlight_style(
+                Style::default()
+                    .add_modifier(Modifier::ITALIC)
+                    .bg(Color::DarkGray),
+            )
+            .highlight_symbol("");
+
+        self.conversation.focus();
+        let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
+        f.render_stateful_widget(list, layout[0], &mut list_state);
+
         Ok(())
     }
+}
+//
+// Helper to convert wrapped lines to a Vec<String>.
+fn lines_to_strings(lines: Vec<&[Word<'_>]>) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| {
+            line.iter()
+                .map(|word| &**word)
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .collect::<Vec<_>>()
 }
