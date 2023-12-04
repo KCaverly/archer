@@ -101,10 +101,12 @@ impl Component for Viewer {
                 }
             }
 
-            lines.push(Line::from(vec![Span::styled(
-                message.content.clone(),
-                Style::default().fg(Color::White),
-            )]));
+            for line in message.content.split("\n") {
+                lines.push(Line::from(vec![Span::styled(
+                    line,
+                    Style::default().fg(Color::White),
+                )]));
+            }
         }
 
         let text = Text::from(lines);

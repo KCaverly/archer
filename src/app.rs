@@ -51,7 +51,7 @@ impl App {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        let (action_tx, mut action_rx) = async_channel::unbounded();
+        let (action_tx, action_rx) = async_channel::unbounded();
 
         let mut tui = tui::Tui::new()?
             .tick_rate(self.tick_rate)
