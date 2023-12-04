@@ -18,6 +18,13 @@ impl Conversation {
         self.messages.push(message);
     }
 
+    pub fn delete_selected_message(&mut self) {
+        if let Some(selected_id) = self.selected_message {
+            self.messages.remove(selected_id);
+            self.select_prev_message();
+        }
+    }
+
     pub fn replace_last_message(&mut self, message: Message) {
         self.messages.pop();
         self.messages.push(message);

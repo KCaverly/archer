@@ -28,6 +28,7 @@ pub struct Viewer {
     config: Config,
     focused: bool,
     conversation: Conversation,
+    active: bool,
 }
 
 impl Viewer {
@@ -64,6 +65,23 @@ impl Component for Viewer {
             Action::StreamMessage(message) => {
                 // Simply replace the last message
                 self.conversation.replace_last_message(message);
+            }
+            Action::ActivateViewer => {
+                self.active = true;
+                self.conversation.focus();
+            }
+            Action::DeactivateViewer => {
+                self.active = false;
+                self.conversation.unfocus();
+            }
+            Action::SelectNextMessage => {
+                self.conversation.select_next_message();
+            }
+            Action::SelectPreviousMessage => {
+                self.conversation.select_prev_message();
+            }
+            Action::DeleteSelectedMessage => {
+                self.conversation.delete_selected_message();
             }
             Action::SendMessage(message) => {
                 // Lets clean this up at some point
@@ -194,7 +212,9 @@ impl Component for Viewer {
                     .title("Conversation")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
-                    .style(Style::default().fg(if self.focused {
+                    .style(Style::default().fg(if self.active {
+                        ACTIVE_COLOR
+                    } else if self.focused {
                         FOCUSED_COLOR
                     } else {
                         UNFOCUSED_COLOR
@@ -208,7 +228,6 @@ impl Component for Viewer {
             )
             .highlight_symbol("");
 
-        self.conversation.focus();
         let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
         f.render_stateful_widget(list, layout[0], &mut list_state);
 

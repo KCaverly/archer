@@ -25,6 +25,11 @@ pub enum Action {
     SendMessage(Message),
     ReceiveMessage(Message),
     StreamMessage(Message),
+    ActivateViewer,
+    DeactivateViewer,
+    SelectNextMessage,
+    SelectPreviousMessage,
+    DeleteSelectedMessage,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -57,6 +62,11 @@ impl<'de> Deserialize<'de> for Action {
                     "FocusInput" => Ok(Action::FocusInput),
                     "ActivateInput" => Ok(Action::ActivateInput),
                     "DeactivateInput" => Ok(Action::DeactivateInput),
+                    "ActivateViewer" => Ok(Action::ActivateViewer),
+                    "DeactivateViewer" => Ok(Action::DeactivateViewer),
+                    "SelectPreviousMessage" => Ok(Action::SelectPreviousMessage),
+                    "SelectNextMessage" => Ok(Action::SelectNextMessage),
+                    "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
 
                     data if data.starts_with("Error(") => {
                         let error_msg = data.trim_start_matches("Error(").trim_end_matches(")");

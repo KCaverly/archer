@@ -160,6 +160,12 @@ impl App {
                     Action::DeactivateInput => {
                         self.mode = Mode::Input;
                     }
+                    Action::ActivateViewer => {
+                        self.mode = Mode::ActiveViewer;
+                    }
+                    Action::DeactivateViewer => {
+                        self.mode = Mode::Viewer;
+                    }
                     _ => {}
                 }
                 for component in self.components.iter_mut() {

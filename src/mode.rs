@@ -6,4 +6,5 @@ pub enum Mode {
     Viewer,
     Input,
     ActiveInput,
+    ActiveViewer,
 }
