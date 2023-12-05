@@ -1,0 +1,179 @@
+use bytes::Bytes;
+use serde::Serialize;
+
+use crate::agent::message::{Message, Role};
+use anyhow::anyhow;
+use eventsource_stream::EventStream;
+use futures::stream;
+use replicate_rs::config::ReplicateConfig;
+use replicate_rs::predictions::{PredictionClient, PredictionStatus};
+use serde_json::json;
+use strum_macros::EnumIter; // 0.17.1
+
+#[derive(Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
+pub enum CompletionModel {
+    #[default]
+    Yi34bChat,
+    Llama2_13bChat,
+    Llama2_70bChat,
+    Llama2_7bChat,
+    Mistral7bInstructV01,
+    Codellama34bInstruct,
+}
+
+impl CompletionModel {
+    pub fn get_model_details(&self) -> (String, String) {
+        match self {
+            CompletionModel::Yi34bChat => ("01-ai".to_string(), "yi-34b-chat".to_string()),
+            CompletionModel::Llama2_13bChat => ("meta".to_string(), "llama-2-13b-chat".to_string()),
+            CompletionModel::Llama2_70bChat => ("meta".to_string(), "llama-2-70b-chat".to_string()),
+            CompletionModel::Llama2_7bChat => ("meta".to_string(), "llama-2-7b-chat".to_string()),
+            CompletionModel::Mistral7bInstructV01 => (
+                "mistralai".to_string(),
+                "mistral-7b-instruct-v0.1".to_string(),
+            ),
+            CompletionModel::Codellama34bInstruct => {
+                ("meta".to_string(), "codellama-34b-instruct".to_string())
+            }
+        }
+    }
+
+    pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
+        match self {
+            CompletionModel::Yi34bChat => {
+                let mut prompt = String::new();
+                for message in messages {
+                    let content = &message.content;
+                    let role = match message.role {
+                        Role::System => "system",
+                        Role::Assistant => "assistant",
+                        Role::User => "user",
+                    };
+
+                    prompt.push_str(format!("\n<im_start|>{role}\n{content}<|im_end|>").as_str());
+                }
+
+                prompt.push_str("<|im_start|>assistant");
+
+                json!({"prompt": prompt, "prompt_template": "{prompt}"})
+            }
+            CompletionModel::Mistral7bInstructV01 => {
+                let mut prompt = "<s>".to_string();
+                for message in messages {
+                    let content = &message.content;
+                    match message.role {
+                        Role::User => {
+                            prompt.push_str(format!("[INST] {content} [/INST]").as_str());
+                        }
+                        Role::Assistant => prompt.push_str(format!(" {content} </s>").as_str()),
+                        Role::System => {
+                            // Currently system prompts do nothing for Mistral
+                        }
+                    }
+                }
+
+                json!({"prompt": prompt})
+            }
+            CompletionModel::Llama2_13bChat
+            | CompletionModel::Llama2_70bChat
+            | CompletionModel::Llama2_7bChat
+            | CompletionModel::Codellama34bInstruct => {
+                let mut system_prompt = String::new();
+                let mut prompt = String::new();
+
+                for message in messages {
+                    let content = &message.content;
+                    match message.role {
+                        Role::System => {
+                            system_prompt.push_str(format!("{content}\n").as_str());
+                        }
+                        Role::User => {
+                            prompt.push_str(format!("{content} [/INST] ").as_str());
+                        }
+                        Role::Assistant => {
+                            prompt.push_str(format!("{content}</s><s>[INST] ").as_str());
+                        }
+                    }
+                }
+
+                json!({"prompt": prompt, "system_prompt": system_prompt, "prompt_template": "[INST] <<SYS>>\n{{system_prompt}}\n<</SYS>>\n\n{{prompt}}", "max_new_tokens": 4000 })
+            }
+        }
+    }
+}
+
+pub async fn get_completion(
+    model: CompletionModel,
+    messages: Vec<Message>,
+) -> anyhow::Result<Message> {
+    // Generate Prompt
+    let inputs = model.get_inputs(&messages);
+    let model_details = model.get_model_details();
+
+    let config = ReplicateConfig::new()?;
+    let client = PredictionClient::from(config);
+
+    let mut prediction = client
+        .create(
+            model_details.0.as_str(),
+            model_details.1.as_str(),
+            inputs,
+            false,
+        )
+        .await?;
+
+    loop {
+        match prediction.status {
+            PredictionStatus::Succeeded => {
+                if let Some(output) = prediction.output {
+                    let content = output
+                        .as_array()
+                        .ok_or(anyhow!("output is unexpected"))?
+                        .iter()
+                        .map(|x| x.as_str().unwrap())
+                        .collect::<String>();
+                    return anyhow::Ok(Message {
+                        role: Role::Assistant,
+                        content,
+                        status: None,
+                        model: Some(model),
+                    });
+                } else {
+                    panic!("output error");
+                }
+            }
+            PredictionStatus::Failed | PredictionStatus::Canceled => {
+                panic!("prediction failed or was canceled");
+            }
+            _ => {}
+        }
+        prediction.reload().await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+    }
+}
+
+pub async fn stream_completion(
+    model: &CompletionModel,
+    messages: Vec<Message>,
+) -> anyhow::Result<(
+    PredictionStatus,
+    EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>,
+)> {
+    let model_details = model.get_model_details();
+    let inputs = model.get_inputs(&messages);
+    let config = ReplicateConfig::new()?;
+    let client = PredictionClient::from(config);
+
+    let mut prediction = client
+        .create(
+            model_details.0.as_str(),
+            model_details.1.as_str(),
+            inputs,
+            true,
+        )
+        .await?;
+
+    let stream = prediction.get_stream().await?;
+    let status = prediction.status;
+    anyhow::Ok((status, stream))
+}

@@ -1,0 +1,65 @@
+{
+  "keybindings": {
+    "Viewer": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+        
+        // Action Keybindings
+        "<j>": "SwitchMode(Input)",
+        "<i>": "SwitchMode(ActiveViewer)",
+        "<m>": "SwitchMode(ModelSelector)",
+      },
+    "ActiveViewer": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+
+        // Action Keybindings
+        "<k>": "SelectPreviousMessage",
+        "<j>": "SelectNextMessage",
+        "<d>": "DeleteSelectedMessage",
+        "<c>": "CopySelectedMessage",
+        "<ESC>": "SwitchMode(Viewer)",
+
+      },
+    "Input": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+        
+        // Action Keybindings
+        "<k>": "SwitchMode(Viewer)",
+        "<i>": "SwitchMode(ActiveInput)",
+        "<m>": "SwitchMode(ModelSelector)",
+      },
+    "ActiveInput": {
+        // Universal Keybindings
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+
+        // Action Keybindings
+        "<ESC>": "SwitchMode(Input)",
+      },
+    "ModelSelector": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+        
+        // Action Keybindings
+        "<m>": "RevertMode",
+        "<j>": "SelectNextModel",
+        "<k>": "SelectPreviousModel",
+        "<enter>": "SwitchToSelectedModel",
+      }
+  }
+}
