@@ -1,4 +1,5 @@
 use super::message::Message;
+use anyhow::anyhow;
 
 #[derive(Default)]
 pub struct Conversation {
@@ -37,11 +38,20 @@ impl Conversation {
     }
 
     pub fn unfocus(&mut self) {
-        self.selected_message = None;
+        // We are no longer changing which note is selected when we focus
     }
 
     pub fn focus(&mut self) {
-        self.selected_message = Some(0);
+        // No longer change which note is selected when we focus
+    }
+
+    pub fn get_selected_message(&self) -> anyhow::Result<Message> {
+        if let Some(currently_selected) = self.selected_message {
+            if let Some(message) = self.messages.get(currently_selected) {
+                return anyhow::Ok(message.clone());
+            }
+        }
+        return Err(anyhow!("Could not retrieve message"));
     }
 
     pub fn select_next_message(&mut self) {

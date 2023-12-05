@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use color_eyre::eyre::Result;
 use crossterm::event::KeyCode;
+use ratatui::widgets::block::{Position, Title};
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -134,8 +135,10 @@ impl Component for MessageInput<'static> {
         let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
-                    .title(format!(" Message ({model_owner}/{model_name}) "))
-                    .title_alignment(Alignment::Left)
+                    .title(
+                        Title::from(format!(" Message ({model_owner}/{model_name}) "))
+                            .alignment(Alignment::Left),
+                    )
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
                     .style(

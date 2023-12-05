@@ -1,7 +1,9 @@
+use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use futures::StreamExt;
-use std::fmt;
+use ratatui::widgets::block::Title;
 use std::str::from_utf8;
 use std::time::Instant;
+use std::{fmt, fs};
 use textwrap::core::Word;
 use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
@@ -37,10 +39,11 @@ pub struct Viewer {
     config: Config,
     conversation: Conversation,
     state: ViewerState,
+    keymap: String,
 }
 
 impl Viewer {
-    pub fn new(focused: bool) -> Self {
+    pub fn new(focused: bool, keymap: String) -> Self {
         let state = if focused {
             ViewerState::Focused
         } else {
@@ -49,6 +52,7 @@ impl Viewer {
 
         Self {
             state,
+            keymap,
             ..Default::default()
         }
     }
@@ -103,6 +107,28 @@ impl Component for Viewer {
             }
             Action::DeleteSelectedMessage => {
                 self.conversation.delete_selected_message();
+            }
+            Action::SwitchKeymap(keymap) => {
+                self.keymap = keymap;
+            }
+            Action::CopySelectedMessage => {
+                let selected_message = self.conversation.get_selected_message().unwrap();
+
+                let content = selected_message.content.clone();
+
+                #[cfg(any(target_os = "linux"))]
+                tokio::spawn(async move {
+                    let mut ctx = Clipboard::new().unwrap();
+                    let _ = ctx
+                        .set()
+                        .wait()
+                        .clipboard(LinuxClipboardKind::Clipboard)
+                        .text(content.clone());
+                });
+
+                let content = selected_message.content.clone();
+                let mut ctx = Clipboard::new()?;
+                let _ = ctx.set().text(content);
             }
             Action::SendMessage(message) => {
                 // Lets clean this up at some point
@@ -233,25 +259,28 @@ impl Component for Viewer {
         }
 
         let vertical_scroll = 0;
-        let list = List::new(message_items.clone())
-            .block(
-                Block::default()
-                    .title(" Conversation ")
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Thick)
-                    .style(Style::default().fg(match self.state {
-                        ViewerState::Active => ACTIVE_COLOR,
-                        ViewerState::Unfocused => UNFOCUSED_COLOR,
-                        ViewerState::Focused => FOCUSED_COLOR,
-                    }))
-                    .bg(Color::Black),
-            )
-            .highlight_style(
-                Style::default()
-                    .add_modifier(Modifier::ITALIC)
-                    .bg(Color::DarkGray),
-            )
-            .highlight_symbol("");
+        let list =
+            List::new(message_items.clone())
+                .block(
+                    Block::default()
+                        .title(Title::from(" Conversation ").alignment(Alignment::Left))
+                        .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Thick)
+                        .style(Style::default().fg(match self.state {
+                            ViewerState::Active => ACTIVE_COLOR,
+                            ViewerState::Unfocused => UNFOCUSED_COLOR,
+                            ViewerState::Focused => FOCUSED_COLOR,
+                        }))
+                        .bg(Color::Black),
+                )
+                .highlight_style(Style::default().add_modifier(Modifier::ITALIC).fg(
+                    match self.state {
+                        ViewerState::Focused | ViewerState::Unfocused => Color::White,
+                        ViewerState::Active => Color::LightYellow,
+                    },
+                ))
+                .highlight_symbol("");
 
         let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
 

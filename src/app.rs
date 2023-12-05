@@ -30,11 +30,13 @@ pub struct App {
     pub mode: Mode,
     pub last_mode: Mode,
     pub last_tick_key_events: Vec<KeyEvent>,
+    pub keymap: String,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
-        let viewer = Viewer::new(false);
+        let keymap = " i: insert; k: focus viewer; m: change model; q: quit; ".to_string();
+        let viewer = Viewer::new(false, keymap.clone());
         let input = MessageInput::new(true);
         let config = Config::new()?;
         let mode = Mode::Input;
@@ -49,12 +51,29 @@ impl App {
             mode,
             last_mode: mode,
             last_tick_key_events: Vec::new(),
+            keymap,
         })
+    }
+
+    pub fn set_keymap(&mut self) {
+        self.keymap = match self.mode {
+            Mode::Input => " i: insert; k: focus viewer; m: change model; q: quit; ",
+            Mode::Viewer => " i: insert; j: focus input; m: change model; q; quit; ",
+            Mode::ActiveInput => " enter: send message; esc: exit input mode; ",
+            Mode::ActiveViewer => {
+                " j: select next; k: select prev; c: copy; esc: exit scroll mode; "
+            }
+            Mode::ModelSelector => {
+                " j: select next; k: select prev; enter: select model; m: close; "
+            }
+        }
+        .to_string();
     }
 
     pub fn set_mode(&mut self, mode: Mode) {
         self.last_mode = self.mode;
         self.mode = mode;
+        self.set_keymap();
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -214,6 +233,9 @@ impl App {
                     }
                     Action::SwitchMode(mode) => {
                         self.set_mode(mode);
+                        action_tx
+                            .send(Action::SwitchKeymap(self.keymap.clone()))
+                            .await?;
                     }
                     _ => {}
                 }

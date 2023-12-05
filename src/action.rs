@@ -27,12 +27,14 @@ pub enum Action {
     SelectNextMessage,
     SelectPreviousMessage,
     DeleteSelectedMessage,
+    CopySelectedMessage,
     RevertMode,
     SwitchMode(Mode),
     SelectNextModel,
     SelectPreviousModel,
     SwitchModel(CompletionModel),
     SwitchToSelectedModel,
+    SwitchKeymap(String),
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -64,6 +66,7 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectPreviousMessage" => Ok(Action::SelectPreviousMessage),
                     "SelectNextMessage" => Ok(Action::SelectNextMessage),
                     "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
+                    "CopySelectedMessage" => Ok(Action::CopySelectedMessage),
                     "RevertMode" => Ok(Action::RevertMode),
                     "SelectPreviousModel" => Ok(Action::SelectPreviousModel),
                     "SelectNextModel" => Ok(Action::SelectNextModel),

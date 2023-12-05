@@ -23,6 +23,7 @@
         "<k>": "SelectPreviousMessage",
         "<j>": "SelectNextMessage",
         "<d>": "DeleteSelectedMessage",
+        "<c>": "CopySelectedMessage",
         "<ESC>": "SwitchMode(Viewer)",
 
       },

@@ -18,6 +18,7 @@ pub enum CompletionModel {
     Llama2_70bChat,
     Llama2_7bChat,
     Mistral7bInstructV01,
+    Codellama34bInstruct,
 }
 
 impl CompletionModel {
@@ -31,6 +32,9 @@ impl CompletionModel {
                 "mistralai".to_string(),
                 "mistral-7b-instruct-v0.1".to_string(),
             ),
+            CompletionModel::Codellama34bInstruct => {
+                ("meta".to_string(), "codellama-34b-instruct".to_string())
+            }
         }
     }
 
@@ -72,7 +76,8 @@ impl CompletionModel {
             }
             CompletionModel::Llama2_13bChat
             | CompletionModel::Llama2_70bChat
-            | CompletionModel::Llama2_7bChat => {
+            | CompletionModel::Llama2_7bChat
+            | CompletionModel::Codellama34bInstruct => {
                 let mut system_prompt = String::new();
                 let mut prompt = String::new();
 
@@ -91,7 +96,7 @@ impl CompletionModel {
                     }
                 }
 
-                json!({"prompt": prompt, "system_prompt": system_prompt, "prompt_template": "[INST] <<SYS>>\n{{system_prompt}}\n<</SYS>>\n\n{{prompt}}", "max_new_tokens": 4000, "stop_sequences": "<</s>>"})
+                json!({"prompt": prompt, "system_prompt": system_prompt, "prompt_template": "[INST] <<SYS>>\n{{system_prompt}}\n<</SYS>>\n\n{{prompt}}", "max_new_tokens": 4000 })
             }
         }
     }
