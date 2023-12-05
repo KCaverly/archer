@@ -1,5 +1,5 @@
 [package]
-name = "bond"
+name = "llmit"
 version = "0.1.0"
 edition = "2021"
 description = "An async terminal interface for interacting with multi-stage LLM agents."
