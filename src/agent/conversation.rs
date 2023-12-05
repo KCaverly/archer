@@ -16,6 +16,7 @@ impl Conversation {
 
     pub fn add_message(&mut self, message: Message) {
         self.messages.push(message);
+        self.select_last_message();
     }
 
     pub fn delete_selected_message(&mut self) {
@@ -25,9 +26,14 @@ impl Conversation {
         }
     }
 
+    pub fn select_last_message(&mut self) {
+        self.selected_message = Some(self.messages.len() - 1);
+    }
+
     pub fn replace_last_message(&mut self, message: Message) {
         self.messages.pop();
         self.messages.push(message);
+        self.select_last_message();
     }
 
     pub fn unfocus(&mut self) {

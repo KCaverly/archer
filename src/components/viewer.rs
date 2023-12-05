@@ -171,6 +171,7 @@ impl Component for Viewer {
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
         // Render Messages
         let mut message_items = Vec::new();
+        let mut line_count: usize = 0;
         for message in &self.conversation.messages {
             let mut message_lines = Vec::new();
 
@@ -225,12 +226,14 @@ impl Component for Viewer {
             }
             message_lines.push(Line::from(vec![Span::styled(break_line, Style::default())]));
 
+            line_count = message_lines.len();
+
             // Add seperator to the bottom of the message
             message_items.push(ListItem::new(Text::from(message_lines)));
         }
 
         let vertical_scroll = 0;
-        let list = List::new(message_items)
+        let list = List::new(message_items.clone())
             .block(
                 Block::default()
                     .title(" Conversation ")
@@ -251,8 +254,22 @@ impl Component for Viewer {
             .highlight_symbol("");
 
         let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
-        f.render_stateful_widget(list, rect, &mut list_state);
 
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let mut scrollbar_state = ScrollbarState::new(line_count).position(vertical_scroll);
+
+        f.render_stateful_widget(list, rect, &mut list_state);
+        f.render_stateful_widget(
+            scrollbar,
+            rect.inner(&Margin {
+                vertical: 1,
+                horizontal: 0,
+            }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
+            &mut scrollbar_state,
+        );
         Ok(())
     }
 }
