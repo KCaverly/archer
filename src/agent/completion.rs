@@ -20,6 +20,28 @@ impl CompletionModel {
             CompletionModel::Yi34B => ("01-ai".to_string(), "yi-34b-chat".to_string()),
         }
     }
+
+    pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
+        match self {
+            CompletionModel::Yi34B => {
+                let mut prompt = String::new();
+                for message in messages {
+                    let content = &message.content;
+                    let role = match message.role {
+                        Role::System => "system",
+                        Role::Assistant => "assistant",
+                        Role::User => "user",
+                    };
+
+                    prompt.push_str(format!("\n<im_start|>{role}<|im_end|>").as_str());
+                }
+
+                prompt.push_str("<|im_start|>assistant");
+
+                json!({"prompt": prompt, "prompt_template": "{prompt}"})
+            }
+        }
+    }
 }
 
 pub async fn get_completion(
@@ -27,24 +49,7 @@ pub async fn get_completion(
     messages: Vec<Message>,
 ) -> anyhow::Result<Message> {
     // Generate Prompt
-    let mut prompt = String::new();
-    for message in messages {
-        let content = message.content;
-        match message.role {
-            Role::System => {
-                prompt.push_str(format!("\n<|im_start|>system\n{content}<|im_end|>").as_str());
-            }
-            Role::User => {
-                prompt.push_str(format!("\n<|im_start|>user\n{content}<|im_end|>").as_str());
-            }
-            Role::Assistant => {
-                prompt.push_str(format!("\n<|im_start|>assistant\n{content}<|im_end|>").as_str());
-            }
-        }
-    }
-
-    prompt.push_str("<|im_start|>assistant");
-
+    let inputs = model.get_inputs(&messages);
     let model_details = model.get_model_details();
 
     let config = ReplicateConfig::new()?;
@@ -54,7 +59,7 @@ pub async fn get_completion(
         .create(
             model_details.0.as_str(),
             model_details.1.as_str(),
-            json!({"prompt": prompt, "prompt_template": "{prompt}"}),
+            inputs,
             false,
         )
         .await?;
