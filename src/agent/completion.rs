@@ -13,25 +13,30 @@ use strum_macros::EnumIter; // 0.17.1
 #[derive(Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     #[default]
-    Yi34B,
+    Yi34bChat,
     Llama2_13bChat,
     Llama2_70bChat,
     Llama2_7bChat,
+    Mistral7bInstructV01,
 }
 
 impl CompletionModel {
     pub fn get_model_details(&self) -> (String, String) {
         match self {
-            CompletionModel::Yi34B => ("01-ai".to_string(), "yi-34b-chat".to_string()),
+            CompletionModel::Yi34bChat => ("01-ai".to_string(), "yi-34b-chat".to_string()),
             CompletionModel::Llama2_13bChat => ("meta".to_string(), "llama-2-13b-chat".to_string()),
             CompletionModel::Llama2_70bChat => ("meta".to_string(), "llama-2-70b-chat".to_string()),
             CompletionModel::Llama2_7bChat => ("meta".to_string(), "llama-2-7b-chat".to_string()),
+            CompletionModel::Mistral7bInstructV01 => (
+                "mistralai".to_string(),
+                "mistral-7b-instruct-v0.1".to_string(),
+            ),
         }
     }
 
     pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
         match self {
-            CompletionModel::Yi34B => {
+            CompletionModel::Yi34bChat => {
                 let mut prompt = String::new();
                 for message in messages {
                     let content = &message.content;
@@ -47,6 +52,23 @@ impl CompletionModel {
                 prompt.push_str("<|im_start|>assistant");
 
                 json!({"prompt": prompt, "prompt_template": "{prompt}"})
+            }
+            CompletionModel::Mistral7bInstructV01 => {
+                let mut prompt = "<s>".to_string();
+                for message in messages {
+                    let content = &message.content;
+                    match message.role {
+                        Role::User => {
+                            prompt.push_str(format!("[INST] {content} [/INST]").as_str());
+                        }
+                        Role::Assistant => prompt.push_str(format!(" {content} </s>").as_str()),
+                        Role::System => {
+                            // Currently system prompts do nothing for Mistral
+                        }
+                    }
+                }
+
+                json!({"prompt": prompt})
             }
             CompletionModel::Llama2_13bChat
             | CompletionModel::Llama2_70bChat

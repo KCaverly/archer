@@ -84,7 +84,19 @@ impl<'de> Deserialize<'de> for Action {
                             .trim_start_matches("SwitchModel(")
                             .trim_end_matches(")");
                         match model {
-                            "Yi34B" => Ok(Action::SwitchModel(CompletionModel::Yi34B)),
+                            "Yi34bChat" => Ok(Action::SwitchModel(CompletionModel::Yi34bChat)),
+                            "Llama2_7bChat" => {
+                                Ok(Action::SwitchModel(CompletionModel::Llama2_7bChat))
+                            }
+                            "Llama2_13bChat" => {
+                                Ok(Action::SwitchModel(CompletionModel::Llama2_13bChat))
+                            }
+                            "Llama2_70bChat" => {
+                                Ok(Action::SwitchModel(CompletionModel::Llama2_70bChat))
+                            }
+                            "Mistral7bInstructV01" => {
+                                Ok(Action::SwitchModel(CompletionModel::Mistral7bInstructV01))
+                            }
                             _ => Err(E::custom(format!("invalid Action Variant: {:?}", model))),
                         }
                     }
