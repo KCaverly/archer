@@ -55,14 +55,14 @@ impl Component for ModelSelector {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
-        let paragraph = Paragraph::new("Model Selector!")
+        let paragraph = Paragraph::new("")
             .block(
                 Block::default()
-                    .title("Model Selector")
+                    .title("Select Model")
                     .title_alignment(Alignment::Left)
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
-                    .style(Style::default().fg(Color::Green).bg(Color::Black)),
+                    .style(Style::default().fg(ACTIVE_COLOR).bg(Color::Black)),
             )
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: true });

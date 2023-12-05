@@ -5,7 +5,10 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::agent::{completion::CompletionModel, message::Message};
+use crate::{
+    agent::{completion::CompletionModel, message::Message},
+    mode::Mode,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {
@@ -18,19 +21,14 @@ pub enum Action {
     Refresh,
     Error(String),
     Help,
-    FocusViewer,
-    FocusInput,
-    ActivateInput,
-    DeactivateInput,
     SendMessage(Message),
     ReceiveMessage(Message),
     StreamMessage(Message),
-    ActivateViewer,
-    DeactivateViewer,
     SelectNextMessage,
     SelectPreviousMessage,
     DeleteSelectedMessage,
-    ToggleModelSelector,
+    RevertMode,
+    SwitchMode(Mode),
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -59,16 +57,21 @@ impl<'de> Deserialize<'de> for Action {
                     "Quit" => Ok(Action::Quit),
                     "Refresh" => Ok(Action::Refresh),
                     "Help" => Ok(Action::Help),
-                    "FocusViewer" => Ok(Action::FocusViewer),
-                    "FocusInput" => Ok(Action::FocusInput),
-                    "ActivateInput" => Ok(Action::ActivateInput),
-                    "DeactivateInput" => Ok(Action::DeactivateInput),
-                    "ActivateViewer" => Ok(Action::ActivateViewer),
-                    "DeactivateViewer" => Ok(Action::DeactivateViewer),
                     "SelectPreviousMessage" => Ok(Action::SelectPreviousMessage),
                     "SelectNextMessage" => Ok(Action::SelectNextMessage),
                     "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
-                    "ToggleModelSelector" => Ok(Action::ToggleModelSelector),
+                    "RevertMode" => Ok(Action::RevertMode),
+                    data if data.starts_with("SwitchMode(") => {
+                        let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
+                        match mode {
+                            "Input" => Ok(Action::SwitchMode(Mode::Input)),
+                            "ActiveInput" => Ok(Action::SwitchMode(Mode::ActiveInput)),
+                            "Viewer" => Ok(Action::SwitchMode(Mode::Viewer)),
+                            "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
+                            "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
+                            _ => Err(E::custom(format!("invalid Action Variant: {:?}", mode))),
+                        }
+                    }
 
                     data if data.starts_with("Error(") => {
                         let error_msg = data.trim_start_matches("Error(").trim_end_matches(")");

@@ -8,9 +8,9 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
         
         // Action Keybindings
-        "<j>": "FocusInput",
-        "<i>": "ActivateViewer",
-        "<m>": "ToggleModelSelector",
+        "<j>": "SwitchMode(Input)",
+        "<i>": "SwitchMode(ActiveViewer)",
+        "<m>": "SwitchMode(ModelSelector)",
       },
     "ActiveViewer": {
         // Universal Keybindings
@@ -23,7 +23,7 @@
         "<k>": "SelectPreviousMessage",
         "<j>": "SelectNextMessage",
         "<d>": "DeleteSelectedMessage",
-        "<ESC>": "DeactivateViewer",
+        "<ESC>": "SwitchMode(Viewer)",
 
       },
     "Input": {
@@ -34,9 +34,9 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
         
         // Action Keybindings
-        "<k>": "FocusViewer",
-        "<i>": "ActivateInput",
-        "<m>": "ToggleModelSelector",
+        "<k>": "SwitchMode(Viewer)",
+        "<i>": "SwitchMode(ActiveInput)",
+        "<m>": "SwitchMode(ModelSelector)",
       },
     "ActiveInput": {
         // Universal Keybindings
@@ -45,7 +45,7 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
 
         // Action Keybindings
-        "<ESC>": "DeactivateInput",
+        "<ESC>": "SwitchMode(Input)",
       },
     "ModelSelector": {
         // Universal Keybindings
@@ -55,7 +55,7 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
         
         // Action Keybindings
-        "<m>": "ToggleModelSelector",
+        "<m>": "RevertMode",
       }
   }
 }

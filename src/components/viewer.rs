@@ -14,6 +14,7 @@ use super::Component;
 use crate::agent::completion::stream_completion;
 use crate::agent::conversation::Conversation;
 use crate::agent::message::{Message, Role};
+use crate::mode::Mode;
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };
@@ -23,18 +24,31 @@ use async_channel::Sender;
 use crate::config::{Config, KeyBindings};
 
 #[derive(Default)]
+enum ViewerState {
+    Active,
+    Focused,
+    #[default]
+    Unfocused,
+}
+
+#[derive(Default)]
 pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    focused: bool,
     conversation: Conversation,
-    active: bool,
+    state: ViewerState,
 }
 
 impl Viewer {
     pub fn new(focused: bool) -> Self {
+        let state = if focused {
+            ViewerState::Focused
+        } else {
+            ViewerState::Unfocused
+        };
+
         Self {
-            focused,
+            state,
             ..Default::default()
         }
     }
@@ -53,12 +67,6 @@ impl Component for Viewer {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::FocusInput => {
-                self.focused = false;
-            }
-            Action::FocusViewer => {
-                self.focused = true;
-            }
             Action::ReceiveMessage(message) => {
                 self.conversation.add_message(message);
             }
@@ -66,14 +74,27 @@ impl Component for Viewer {
                 // Simply replace the last message
                 self.conversation.replace_last_message(message);
             }
-            Action::ActivateViewer => {
-                self.active = true;
-                self.conversation.focus();
-            }
-            Action::DeactivateViewer => {
-                self.active = false;
-                self.conversation.unfocus();
-            }
+
+            Action::SwitchMode(mode) => match mode {
+                Mode::Viewer => {
+                    self.state = ViewerState::Focused;
+                    self.conversation.unfocus();
+                }
+                Mode::ActiveViewer => {
+                    self.state = ViewerState::Active;
+                    self.conversation.focus();
+                }
+                Mode::ModelSelector => {
+                    self.state = ViewerState::Unfocused;
+                    self.conversation.unfocus();
+                }
+                Mode::Input => {
+                    self.state = ViewerState::Unfocused;
+                }
+                Mode::ActiveInput => {
+                    self.state = ViewerState::Unfocused;
+                }
+            },
             Action::SelectNextMessage => {
                 self.conversation.select_next_message();
             }
@@ -207,12 +228,10 @@ impl Component for Viewer {
                     .title("Conversation")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
-                    .style(Style::default().fg(if self.active {
-                        ACTIVE_COLOR
-                    } else if self.focused {
-                        FOCUSED_COLOR
-                    } else {
-                        UNFOCUSED_COLOR
+                    .style(Style::default().fg(match self.state {
+                        ViewerState::Active => ACTIVE_COLOR,
+                        ViewerState::Unfocused => UNFOCUSED_COLOR,
+                        ViewerState::Focused => FOCUSED_COLOR,
                     }))
                     .bg(Color::Black),
             )

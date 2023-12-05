@@ -9,25 +9,38 @@ use super::Component;
 use crate::agent::completion::CompletionModel;
 use crate::agent::message::{Message, Role};
 use crate::config::{Config, KeyBindings};
+use crate::mode::Mode;
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
 use async_channel::Sender;
+
+#[derive(Default, Eq, PartialEq)]
+enum InputState {
+    Focused,
+    #[default]
+    Unfocused,
+    Active,
+}
 
 #[derive(Default)]
 pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    active: bool,
-    focused: bool,
     current_input: String,
     display_spans: Vec<Span<'a>>,
     slash_command: bool,
+    state: InputState,
 }
 
 impl MessageInput<'static> {
     pub fn new(focused: bool) -> Self {
+        let state = if focused {
+            InputState::Focused
+        } else {
+            InputState::Unfocused
+        };
         Self {
-            focused,
+            state,
             ..Default::default()
         }
     }
@@ -45,7 +58,7 @@ impl Component for MessageInput<'static> {
     }
 
     fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
-        if self.active {
+        if self.state == InputState::Active {
             match key.code {
                 KeyCode::Char(c) => {
                     if (c == '/' && self.current_input == String::new())
@@ -94,16 +107,17 @@ impl Component for MessageInput<'static> {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::FocusViewer => {
-                self.focused = false;
-                self.active = false;
-            }
-            Action::FocusInput => {
-                self.focused = true;
-                self.active = false;
-            }
-            Action::ActivateInput => self.active = true,
-            Action::DeactivateInput => self.active = false,
+            Action::SwitchMode(mode) => match mode {
+                Mode::Viewer | Mode::ActiveViewer | Mode::ModelSelector => {
+                    self.state = InputState::Unfocused;
+                }
+                Mode::Input => {
+                    self.state = InputState::Focused;
+                }
+                Mode::ActiveInput => {
+                    self.state = InputState::Active;
+                }
+            },
 
             _ => {}
         }
@@ -121,12 +135,10 @@ impl Component for MessageInput<'static> {
                     .border_type(BorderType::Thick)
                     .style(
                         Style::default()
-                            .fg(if self.active {
-                                ACTIVE_COLOR
-                            } else if self.focused {
-                                FOCUSED_COLOR
-                            } else {
-                                UNFOCUSED_COLOR
+                            .fg(match self.state {
+                                InputState::Active => ACTIVE_COLOR,
+                                InputState::Focused => FOCUSED_COLOR,
+                                InputState::Unfocused => UNFOCUSED_COLOR,
                             })
                             .bg(Color::Black),
                     ),

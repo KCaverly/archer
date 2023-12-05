@@ -206,30 +206,14 @@ impl App {
                             }
                         })?;
                     }
-                    Action::FocusViewer => {
-                        self.set_mode(Mode::Viewer);
+                    Action::RevertMode => {
+                        action_tx
+                            .send(Action::SwitchMode(self.last_mode))
+                            .await
+                            .ok();
                     }
-                    Action::FocusInput => {
-                        self.set_mode(Mode::Input);
-                    }
-                    Action::ActivateInput => {
-                        self.set_mode(Mode::ActiveInput);
-                    }
-                    Action::DeactivateInput => {
-                        self.set_mode(Mode::Input);
-                    }
-                    Action::ActivateViewer => {
-                        self.set_mode(Mode::ActiveViewer);
-                    }
-                    Action::DeactivateViewer => {
-                        self.set_mode(Mode::Viewer);
-                    }
-                    Action::ToggleModelSelector => {
-                        if self.mode == Mode::ModelSelector {
-                            self.set_mode(self.last_mode);
-                        } else {
-                            self.set_mode(Mode::ModelSelector);
-                        }
+                    Action::SwitchMode(mode) => {
+                        self.set_mode(mode);
                     }
                     _ => {}
                 }
