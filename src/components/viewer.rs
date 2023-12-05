@@ -173,6 +173,7 @@ impl Component for Viewer {
         let mut message_items = Vec::new();
         for message in &self.conversation.messages {
             let mut message_lines = Vec::new();
+
             match message.role {
                 Role::System => message_lines.push(Line::from(vec![Span::styled(
                     "System",
@@ -218,6 +219,13 @@ impl Component for Viewer {
                 }
             }
 
+            let mut break_line = String::new();
+            for _ in 0..(rect.width - 2) {
+                break_line.push('-');
+            }
+            message_lines.push(Line::from(vec![Span::styled(break_line, Style::default())]));
+
+            // Add seperator to the bottom of the message
             message_items.push(ListItem::new(Text::from(message_lines)));
         }
 
