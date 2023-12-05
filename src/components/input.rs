@@ -30,6 +30,7 @@ pub struct MessageInput<'a> {
     display_spans: Vec<Span<'a>>,
     slash_command: bool,
     state: InputState,
+    active_model: CompletionModel,
 }
 
 impl MessageInput<'static> {
@@ -92,7 +93,7 @@ impl Component for MessageInput<'static> {
                         role: Role::User,
                         content: self.current_input.clone(),
                         status: None,
-                        model: Some(CompletionModel::Yi34B),
+                        model: Some(self.active_model.clone()),
                     });
                     self.display_spans = Vec::new();
                     self.current_input = String::new();
@@ -118,6 +119,9 @@ impl Component for MessageInput<'static> {
                     self.state = InputState::Active;
                 }
             },
+            Action::SwitchModel(model) => {
+                self.active_model = model;
+            }
 
             _ => {}
         }
@@ -126,10 +130,11 @@ impl Component for MessageInput<'static> {
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
         let text = Text::from(Line::from(self.display_spans.clone()));
+        let (model_owner, model_name) = self.active_model.get_model_details();
         let paragraph = Paragraph::new(text)
             .block(
                 Block::default()
-                    .title("Input")
+                    .title(format!(" Message ({model_owner}/{model_name}) "))
                     .title_alignment(Alignment::Left)
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)

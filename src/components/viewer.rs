@@ -225,7 +225,7 @@ impl Component for Viewer {
         let list = List::new(message_items)
             .block(
                 Block::default()
-                    .title("Conversation")
+                    .title(" Conversation ")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)
                     .style(Style::default().fg(match self.state {

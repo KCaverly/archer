@@ -29,6 +29,10 @@ pub enum Action {
     DeleteSelectedMessage,
     RevertMode,
     SwitchMode(Mode),
+    SelectNextModel,
+    SelectPreviousModel,
+    SwitchModel(CompletionModel),
+    SwitchToSelectedModel,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -61,6 +65,9 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectNextMessage" => Ok(Action::SelectNextMessage),
                     "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
                     "RevertMode" => Ok(Action::RevertMode),
+                    "SelectPreviousModel" => Ok(Action::SelectPreviousModel),
+                    "SelectNextModel" => Ok(Action::SelectNextModel),
+                    "SwitchToSelectedModel" => Ok(Action::SwitchToSelectedModel),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {
@@ -70,6 +77,15 @@ impl<'de> Deserialize<'de> for Action {
                             "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
                             "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
                             _ => Err(E::custom(format!("invalid Action Variant: {:?}", mode))),
+                        }
+                    }
+                    data if data.starts_with("SwitchModel(") => {
+                        let model = data
+                            .trim_start_matches("SwitchModel(")
+                            .trim_end_matches(")");
+                        match model {
+                            "Yi34B" => Ok(Action::SwitchModel(CompletionModel::Yi34B)),
+                            _ => Err(E::custom(format!("invalid Action Variant: {:?}", model))),
                         }
                     }
 

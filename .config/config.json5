@@ -56,6 +56,9 @@
         
         // Action Keybindings
         "<m>": "RevertMode",
+        "<j>": "SelectNextModel",
+        "<k>": "SelectPreviousModel",
+        "<enter>": "SwitchToSelectedModel",
       }
   }
 }

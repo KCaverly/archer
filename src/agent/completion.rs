@@ -8,16 +8,24 @@ use futures::stream;
 use replicate_rs::config::ReplicateConfig;
 use replicate_rs::predictions::{PredictionClient, PredictionStatus};
 use serde_json::json;
+use strum_macros::EnumIter; // 0.17.1
 
-#[derive(Eq, PartialEq, Debug, Clone, Serialize)]
+#[derive(Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
+    #[default]
     Yi34B,
+    Llama2_13bChat,
+    Llama2_70bChat,
+    Llama2_7bChat,
 }
 
 impl CompletionModel {
     pub fn get_model_details(&self) -> (String, String) {
         match self {
             CompletionModel::Yi34B => ("01-ai".to_string(), "yi-34b-chat".to_string()),
+            CompletionModel::Llama2_13bChat => ("meta".to_string(), "llama-2-13b-chat".to_string()),
+            CompletionModel::Llama2_70bChat => ("meta".to_string(), "llama-2-70b-chat".to_string()),
+            CompletionModel::Llama2_7bChat => ("meta".to_string(), "llama-2-7b-chat".to_string()),
         }
     }
 
@@ -33,12 +41,35 @@ impl CompletionModel {
                         Role::User => "user",
                     };
 
-                    prompt.push_str(format!("\n<im_start|>{role}<|im_end|>").as_str());
+                    prompt.push_str(format!("\n<im_start|>{role}\n{content}<|im_end|>").as_str());
                 }
 
                 prompt.push_str("<|im_start|>assistant");
 
                 json!({"prompt": prompt, "prompt_template": "{prompt}"})
+            }
+            CompletionModel::Llama2_13bChat
+            | CompletionModel::Llama2_70bChat
+            | CompletionModel::Llama2_7bChat => {
+                let mut system_prompt = String::new();
+                let mut prompt = String::new();
+
+                for message in messages {
+                    let content = &message.content;
+                    match message.role {
+                        Role::System => {
+                            system_prompt.push_str(format!("{content}\n").as_str());
+                        }
+                        Role::User => {
+                            prompt.push_str(format!("{content} [/INST] ").as_str());
+                        }
+                        Role::Assistant => {
+                            prompt.push_str(format!("{content}</s><s>[INST] ").as_str());
+                        }
+                    }
+                }
+
+                json!({"prompt": prompt, "system_prompt": system_prompt, "prompt_template": "[INST] <<SYS>>\n{{system_prompt}}\n<</SYS>>\n\n{{prompt}}", "max_new_tokens": 4000, "stop_sequences": "<</s>>"})
             }
         }
     }
@@ -101,26 +132,8 @@ pub async fn stream_completion(
     PredictionStatus,
     EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>,
 )> {
-    // Generate Prompt
-    let mut prompt = String::new();
-    for message in messages {
-        let content = message.content;
-        match message.role {
-            Role::System => {
-                prompt.push_str(format!("\n<|im_start|>system\n{content}<|im_end|>").as_str());
-            }
-            Role::User => {
-                prompt.push_str(format!("\n<|im_start|>user\n{content}<|im_end|>").as_str());
-            }
-            Role::Assistant => {
-                prompt.push_str(format!("\n<|im_start|>assistant\n{content}<|im_end|>").as_str());
-            }
-        }
-    }
-
-    prompt.push_str("<|im_start|>assistant");
-
     let model_details = model.get_model_details();
+    let inputs = model.get_inputs(&messages);
     let config = ReplicateConfig::new()?;
     let client = PredictionClient::from(config);
 
@@ -128,7 +141,7 @@ pub async fn stream_completion(
         .create(
             model_details.0.as_str(),
             model_details.1.as_str(),
-            json!({"prompt": prompt, "prompt_template": "{prompt}"}),
+            inputs,
             true,
         )
         .await?;
