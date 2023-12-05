@@ -10,6 +10,7 @@ use crate::{
 };
 
 pub mod input;
+pub mod model_selector;
 pub mod viewer;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.

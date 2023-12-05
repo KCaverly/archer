@@ -148,11 +148,6 @@ impl Component for Viewer {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
-            .split(rect);
-
         // Render Messages
         let mut message_items = Vec::new();
         for message in &self.conversation.messages {
@@ -229,7 +224,7 @@ impl Component for Viewer {
             .highlight_symbol("");
 
         let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
-        f.render_stateful_widget(list, layout[0], &mut list_state);
+        f.render_stateful_widget(list, rect, &mut list_state);
 
         Ok(())
     }

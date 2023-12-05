@@ -7,4 +7,5 @@ pub enum Mode {
     Input,
     ActiveInput,
     ActiveViewer,
+    ModelSelector,
 }

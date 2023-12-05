@@ -30,6 +30,7 @@ pub enum Action {
     SelectNextMessage,
     SelectPreviousMessage,
     DeleteSelectedMessage,
+    ToggleModelSelector,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -67,6 +68,7 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectPreviousMessage" => Ok(Action::SelectPreviousMessage),
                     "SelectNextMessage" => Ok(Action::SelectNextMessage),
                     "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
+                    "ToggleModelSelector" => Ok(Action::ToggleModelSelector),
 
                     data if data.starts_with("Error(") => {
                         let error_msg = data.trim_start_matches("Error(").trim_end_matches(")");

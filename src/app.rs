@@ -2,7 +2,7 @@ use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
-use ratatui::prelude::Rect;
+use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 use replicate_rs::predictions::PredictionStatus;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -14,7 +14,7 @@ use crate::{
         conversation::Conversation,
         message::{Message, Role},
     },
-    components::{input::MessageInput, viewer::Viewer, Component},
+    components::{input::MessageInput, model_selector::ModelSelector, viewer::Viewer, Component},
     config::Config,
     mode::Mode,
     tui,
@@ -28,6 +28,7 @@ pub struct App {
     pub should_quit: bool,
     pub should_suspend: bool,
     pub mode: Mode,
+    pub last_mode: Mode,
     pub last_tick_key_events: Vec<KeyEvent>,
 }
 
@@ -37,16 +38,23 @@ impl App {
         let input = MessageInput::new(true);
         let config = Config::new()?;
         let mode = Mode::Input;
+        let model_selector = ModelSelector::new();
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(viewer), Box::new(input)],
+            components: vec![Box::new(viewer), Box::new(input), Box::new(model_selector)],
             should_quit: false,
             should_suspend: false,
             config,
             mode,
+            last_mode: mode,
             last_tick_key_events: Vec::new(),
         })
+    }
+
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.last_mode = self.mode;
+        self.mode = mode;
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -134,8 +142,58 @@ impl App {
                     }
                     Action::Render => {
                         tui.draw(|f| {
-                            for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.size());
+                            let rect = f.size();
+
+                            let mut viewer_layout: Rect;
+                            let input_layout: Rect;
+                            let mut selector_layout: Option<Rect> = None;
+
+                            let layout1 = Layout::default()
+                                .direction(Direction::Vertical)
+                                .constraints(vec![
+                                    Constraint::Percentage(90),
+                                    Constraint::Percentage(10),
+                                ])
+                                .split(rect);
+
+                            viewer_layout = layout1[0];
+                            input_layout = layout1[1];
+                            if self.mode == Mode::ModelSelector {
+                                let layout2 = Layout::default()
+                                    .direction(Direction::Horizontal)
+                                    .constraints(vec![
+                                        Constraint::Percentage(70),
+                                        Constraint::Percentage(30),
+                                    ])
+                                    .split(viewer_layout);
+                                viewer_layout = layout2[0];
+                                selector_layout = Some(layout2[1]);
+                            }
+
+                            let r = self.components[0].draw(f, viewer_layout);
+                            if let Err(e) = r {
+                                let action_tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    action_tx
+                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
+                                        .await
+                                        .unwrap();
+                                });
+                            }
+
+                            let r = self.components[1].draw(f, input_layout);
+                            if let Err(e) = r {
+                                let action_tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    action_tx
+                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
+                                        .await
+                                        .unwrap();
+                                });
+                            }
+
+                            if let Some(selector_layout) = selector_layout {
+                                let r = self.components[2].draw(f, selector_layout);
                                 if let Err(e) = r {
                                     let action_tx = action_tx.clone();
                                     tokio::spawn(async move {
@@ -149,22 +207,29 @@ impl App {
                         })?;
                     }
                     Action::FocusViewer => {
-                        self.mode = Mode::Viewer;
+                        self.set_mode(Mode::Viewer);
                     }
                     Action::FocusInput => {
-                        self.mode = Mode::Input;
+                        self.set_mode(Mode::Input);
                     }
                     Action::ActivateInput => {
-                        self.mode = Mode::ActiveInput;
+                        self.set_mode(Mode::ActiveInput);
                     }
                     Action::DeactivateInput => {
-                        self.mode = Mode::Input;
+                        self.set_mode(Mode::Input);
                     }
                     Action::ActivateViewer => {
-                        self.mode = Mode::ActiveViewer;
+                        self.set_mode(Mode::ActiveViewer);
                     }
                     Action::DeactivateViewer => {
-                        self.mode = Mode::Viewer;
+                        self.set_mode(Mode::Viewer);
+                    }
+                    Action::ToggleModelSelector => {
+                        if self.mode == Mode::ModelSelector {
+                            self.set_mode(self.last_mode);
+                        } else {
+                            self.set_mode(Mode::ModelSelector);
+                        }
                     }
                     _ => {}
                 }

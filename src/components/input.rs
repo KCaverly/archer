@@ -111,11 +111,6 @@ impl Component for MessageInput<'static> {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
-        let layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
-            .split(rect);
-
         let text = Text::from(Line::from(self.display_spans.clone()));
         let paragraph = Paragraph::new(text)
             .block(
@@ -138,7 +133,7 @@ impl Component for MessageInput<'static> {
             )
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: true });
-        f.render_widget(paragraph, layout[1]);
+        f.render_widget(paragraph, rect);
         Ok(())
     }
 }
