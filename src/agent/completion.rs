@@ -19,6 +19,7 @@ pub enum CompletionModel {
     Llama2_7bChat,
     Mistral7bInstructV01,
     Codellama34bInstruct,
+    DeepseekCoder6_7bInstruct,
 }
 
 impl CompletionModel {
@@ -35,6 +36,10 @@ impl CompletionModel {
             CompletionModel::Codellama34bInstruct => {
                 ("meta".to_string(), "codellama-34b-instruct".to_string())
             }
+            CompletionModel::DeepseekCoder6_7bInstruct => (
+                "kcaverly".to_string(),
+                "deepseek-coder-6.7b-instruct".to_string(),
+            ),
         }
     }
 
@@ -56,6 +61,21 @@ impl CompletionModel {
                 prompt.push_str("<|im_start|>assistant");
 
                 json!({"prompt": prompt, "prompt_template": "{prompt}"})
+            }
+            CompletionModel::DeepseekCoder6_7bInstruct => {
+                let mut message_objects = Vec::new();
+                for message in messages {
+                    let role = match message.role {
+                        Role::System => "system",
+                        Role::Assistant => "assistant",
+                        Role::User => "user",
+                    };
+                    message_objects.push(json!({"role": role, "content": message.content}));
+                }
+
+                let message_str = serde_json::to_string(&message_objects).unwrap();
+
+                json!({"messages": message_str})
             }
             CompletionModel::Mistral7bInstructV01 => {
                 let mut prompt = "<s>".to_string();
