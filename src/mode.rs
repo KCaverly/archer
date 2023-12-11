@@ -8,4 +8,5 @@ pub enum Mode {
     ActiveInput,
     ActiveViewer,
     ModelSelector,
+    MessageViewer,
 }

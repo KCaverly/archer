@@ -20,12 +20,23 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
 
         // Action Keybindings
+        "<f>": "SwitchMode(MessageViewer)",
         "<k>": "SelectPreviousMessage",
         "<j>": "SelectNextMessage",
         "<d>": "DeleteSelectedMessage",
         "<c>": "CopySelectedMessage",
         "<ESC>": "SwitchMode(Viewer)",
 
+      },
+    "MessageViewer": {
+        // Universal Keybindings
+        "<q>": "Quit", // Quit the application
+        "<Ctrl-d>": "Quit", // Another way to quit
+        "<Ctrl-c>": "Quit", // Yet another way to quit
+        "<Ctrl-z>": "Suspend", // Suspend the application
+
+        // Action Keybindings
+        "<ESC>": "SwitchMode(ActiveViewer)",
       },
     "Input": {
         // Universal Keybindings

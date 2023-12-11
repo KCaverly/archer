@@ -110,7 +110,7 @@ impl Component for MessageInput<'static> {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::SwitchMode(mode) => match mode {
-                Mode::Viewer | Mode::ActiveViewer | Mode::ModelSelector => {
+                Mode::Viewer | Mode::ActiveViewer | Mode::ModelSelector | Mode::MessageViewer => {
                     self.state = InputState::Unfocused;
                 }
                 Mode::Input => {

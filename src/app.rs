@@ -66,6 +66,7 @@ impl App {
             Mode::ModelSelector => {
                 " j: select next; k: select prev; enter: select model; m: close; "
             }
+            Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all message; ",
         }
         .to_string();
     }

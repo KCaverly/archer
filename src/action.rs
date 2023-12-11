@@ -28,6 +28,7 @@ pub enum Action {
     SelectPreviousMessage,
     DeleteSelectedMessage,
     CopySelectedMessage,
+    ToggleMaximized,
     RevertMode,
     SwitchMode(Mode),
     SelectNextModel,
@@ -79,6 +80,7 @@ impl<'de> Deserialize<'de> for Action {
                             "Viewer" => Ok(Action::SwitchMode(Mode::Viewer)),
                             "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
                             "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
+                            "MessageViewer" => Ok(Action::SwitchMode(Mode::MessageViewer)),
                             _ => Err(E::custom(format!("invalid Action Variant: {:?}", mode))),
                         }
                     }

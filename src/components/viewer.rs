@@ -31,6 +31,7 @@ enum ViewerState {
     Focused,
     #[default]
     Unfocused,
+    Maximized,
 }
 
 #[derive(Default)]
@@ -97,6 +98,9 @@ impl Component for Viewer {
                 }
                 Mode::ActiveInput => {
                     self.state = ViewerState::Unfocused;
+                }
+                Mode::MessageViewer => {
+                    self.state = ViewerState::Maximized;
                 }
             },
             Action::SelectNextMessage => {
@@ -195,110 +199,196 @@ impl Component for Viewer {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
-        // Render Messages
-        let mut message_items = Vec::new();
-        let mut line_count: usize = 0;
-        for message in &self.conversation.messages {
-            let mut message_lines = Vec::new();
+        let mut visible_lines = rect.height as usize;
 
-            match message.role {
-                Role::System => message_lines.push(Line::from(vec![Span::styled(
-                    "System",
-                    Style::default().fg(SYSTEM_COLOR).bold(),
-                )])),
-                Role::User => message_lines.push(Line::from(vec![Span::styled(
-                    "User",
-                    Style::default().fg(USER_COLOR).bold(),
-                )])),
-                Role::Assistant => {
-                    let mut spans = Vec::new();
-                    spans.push(Span::styled(
-                        "Assistant",
-                        Style::default().fg(ASSISTANT_COLOR).bold(),
-                    ));
+        match self.state {
+            ViewerState::Maximized => {
+                if let Some(message) = self.conversation.get_selected_message().ok() {
+                    let mut message_lines = Vec::new();
 
-                    if let Some(model) = &message.model {
-                        let (owner, model_name) = model.get_model_details();
-                        spans.push(Span::styled(
-                            format!(": ({owner}/{model_name})"),
-                            Style::default().fg(ASSISTANT_COLOR),
-                        ));
+                    match message.role {
+                        Role::System => message_lines.push(Line::from(vec![Span::styled(
+                            "System",
+                            Style::default().fg(SYSTEM_COLOR).bold(),
+                        )])),
+                        Role::User => message_lines.push(Line::from(vec![Span::styled(
+                            "User",
+                            Style::default().fg(USER_COLOR).bold(),
+                        )])),
+                        Role::Assistant => {
+                            let mut spans = Vec::new();
+                            spans.push(Span::styled(
+                                "Assistant",
+                                Style::default().fg(ASSISTANT_COLOR).bold(),
+                            ));
+
+                            if let Some(model) = &message.model {
+                                let (owner, model_name) = model.get_model_details();
+                                spans.push(Span::styled(
+                                    format!(": ({owner}/{model_name})"),
+                                    Style::default().fg(ASSISTANT_COLOR),
+                                ));
+                            }
+                            message_lines.push(Line::from(spans));
+                        }
                     }
 
-                    message_lines.push(Line::from(spans));
+                    for line in message.content.split("\n") {
+                        let words = WordSeparator::AsciiSpace
+                            .find_words(line)
+                            .collect::<Vec<_>>();
+                        let subs = lines_to_strings(
+                            wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
+                                .unwrap(),
+                        );
+
+                        for sub in subs {
+                            message_lines.push(Line::from(vec![Span::styled(
+                                sub,
+                                Style::default().fg(Color::White),
+                            )]));
+                        }
+                    }
+
+                    let text = Text::from(message_lines);
+                    let paragraph = Paragraph::new(text)
+                        .block(
+                            Block::default()
+                                .title(
+                                    Title::from(format!(" Focused Message "))
+                                        .alignment(Alignment::Left),
+                                )
+                                .borders(Borders::ALL)
+                                .border_type(BorderType::Thick)
+                                .style(Style::default().fg(ACTIVE_COLOR).bg(Color::Black)),
+                        )
+                        .alignment(Alignment::Left)
+                        .wrap(Wrap { trim: true });
+                    f.render_widget(paragraph, rect);
                 }
             }
+            _ => {
+                // Render Messages
+                let mut message_items = Vec::new();
+                let mut line_count: usize = 0;
+                for message in &self.conversation.messages {
+                    let mut message_lines = Vec::new();
 
-            for line in message.content.split("\n") {
-                let words = WordSeparator::AsciiSpace
-                    .find_words(line)
-                    .collect::<Vec<_>>();
-                let subs = lines_to_strings(
-                    wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
-                        .unwrap(),
+                    match message.role {
+                        Role::System => message_lines.push(Line::from(vec![Span::styled(
+                            "System",
+                            Style::default().fg(SYSTEM_COLOR).bold(),
+                        )])),
+                        Role::User => message_lines.push(Line::from(vec![Span::styled(
+                            "User",
+                            Style::default().fg(USER_COLOR).bold(),
+                        )])),
+                        Role::Assistant => {
+                            let mut spans = Vec::new();
+                            spans.push(Span::styled(
+                                "Assistant",
+                                Style::default().fg(ASSISTANT_COLOR).bold(),
+                            ));
+
+                            if let Some(model) = &message.model {
+                                let (owner, model_name) = model.get_model_details();
+                                spans.push(Span::styled(
+                                    format!(": ({owner}/{model_name})"),
+                                    Style::default().fg(ASSISTANT_COLOR),
+                                ));
+                            }
+                            message_lines.push(Line::from(spans));
+                        }
+                    }
+
+                    visible_lines -= message_lines.len();
+
+                    'outer: for line in message.content.split("\n") {
+                        let words = WordSeparator::AsciiSpace
+                            .find_words(line)
+                            .collect::<Vec<_>>();
+                        let subs = lines_to_strings(
+                            wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
+                                .unwrap(),
+                        );
+
+                        for sub in subs {
+                            if visible_lines <= 2 {
+                                message_lines.push(Line::from(vec![Span::styled(
+                                    "...",
+                                    Style::default().fg(Color::White),
+                                )]));
+                                break 'outer;
+                            }
+
+                            message_lines.push(Line::from(vec![Span::styled(
+                                sub,
+                                Style::default().fg(Color::White),
+                            )]));
+
+                            visible_lines -= 1;
+                        }
+                    }
+
+                    let mut break_line = String::new();
+                    for _ in 0..(rect.width - 2) {
+                        break_line.push('-');
+                    }
+                    message_lines
+                        .push(Line::from(vec![Span::styled(break_line, Style::default())]));
+
+                    line_count = message_lines.len();
+
+                    // Add seperator to the bottom of the message
+                    message_items.push(ListItem::new(Text::from(message_lines)));
+                }
+
+                let vertical_scroll = 0;
+                let list = List::new(message_items.clone())
+                    .block(
+                        Block::default()
+                            .title(Title::from(" Conversation ").alignment(Alignment::Left))
+                            .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
+                            .borders(Borders::ALL)
+                            .border_type(BorderType::Thick)
+                            .style(Style::default().fg(match self.state {
+                                ViewerState::Active | ViewerState::Maximized => ACTIVE_COLOR,
+                                ViewerState::Unfocused => UNFOCUSED_COLOR,
+                                ViewerState::Focused => FOCUSED_COLOR,
+                            }))
+                            .bg(Color::Black),
+                    )
+                    .highlight_style(Style::default().add_modifier(Modifier::ITALIC).fg(
+                        match self.state {
+                            ViewerState::Focused
+                            | ViewerState::Unfocused
+                            | ViewerState::Maximized => Color::White,
+                            ViewerState::Active => Color::LightYellow,
+                        },
+                    ))
+                    .highlight_symbol("");
+
+                let mut list_state =
+                    ListState::default().with_selected(self.conversation.selected_message);
+
+                let scrollbar = Scrollbar::default()
+                    .orientation(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(Some("↑"))
+                    .end_symbol(Some("↓"));
+                let mut scrollbar_state = ScrollbarState::new(line_count).position(vertical_scroll);
+
+                f.render_stateful_widget(list, rect, &mut list_state);
+                f.render_stateful_widget(
+                    scrollbar,
+                    rect.inner(&Margin {
+                        vertical: 1,
+                        horizontal: 0,
+                    }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
+                    &mut scrollbar_state,
                 );
-
-                for sub in subs {
-                    message_lines.push(Line::from(vec![Span::styled(
-                        sub,
-                        Style::default().fg(Color::White),
-                    )]));
-                }
             }
-
-            let mut break_line = String::new();
-            for _ in 0..(rect.width - 2) {
-                break_line.push('-');
-            }
-            message_lines.push(Line::from(vec![Span::styled(break_line, Style::default())]));
-
-            line_count = message_lines.len();
-
-            // Add seperator to the bottom of the message
-            message_items.push(ListItem::new(Text::from(message_lines)));
         }
 
-        let vertical_scroll = 0;
-        let list =
-            List::new(message_items.clone())
-                .block(
-                    Block::default()
-                        .title(Title::from(" Conversation ").alignment(Alignment::Left))
-                        .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Thick)
-                        .style(Style::default().fg(match self.state {
-                            ViewerState::Active => ACTIVE_COLOR,
-                            ViewerState::Unfocused => UNFOCUSED_COLOR,
-                            ViewerState::Focused => FOCUSED_COLOR,
-                        }))
-                        .bg(Color::Black),
-                )
-                .highlight_style(Style::default().add_modifier(Modifier::ITALIC).fg(
-                    match self.state {
-                        ViewerState::Focused | ViewerState::Unfocused => Color::White,
-                        ViewerState::Active => Color::LightYellow,
-                    },
-                ))
-                .highlight_symbol("");
-
-        let mut list_state = ListState::default().with_selected(self.conversation.selected_message);
-
-        let scrollbar = Scrollbar::default()
-            .orientation(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓"));
-        let mut scrollbar_state = ScrollbarState::new(line_count).position(vertical_scroll);
-
-        f.render_stateful_widget(list, rect, &mut list_state);
-        f.render_stateful_widget(
-            scrollbar,
-            rect.inner(&Margin {
-                vertical: 1,
-                horizontal: 0,
-            }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
-            &mut scrollbar_state,
-        );
         Ok(())
     }
 }
