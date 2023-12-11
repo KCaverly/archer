@@ -344,29 +344,30 @@ impl Component for Viewer {
                 }
 
                 let vertical_scroll = 0;
-                let list = List::new(message_items.clone())
-                    .block(
-                        Block::default()
-                            .title(Title::from(" Conversation ").alignment(Alignment::Left))
-                            .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
-                            .borders(Borders::ALL)
-                            .border_type(BorderType::Thick)
-                            .style(Style::default().fg(match self.state {
-                                ViewerState::Active | ViewerState::Maximized => ACTIVE_COLOR,
-                                ViewerState::Unfocused => UNFOCUSED_COLOR,
-                                ViewerState::Focused => FOCUSED_COLOR,
-                            }))
-                            .bg(Color::Black),
-                    )
-                    .highlight_style(Style::default().add_modifier(Modifier::ITALIC).fg(
-                        match self.state {
-                            ViewerState::Focused
-                            | ViewerState::Unfocused
-                            | ViewerState::Maximized => Color::White,
-                            ViewerState::Active => Color::LightYellow,
-                        },
-                    ))
-                    .highlight_symbol("");
+                let list = List::new(message_items.clone()).block(
+                    Block::default()
+                        .title(Title::from(" Conversation ").alignment(Alignment::Left))
+                        .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Thick)
+                        .style(Style::default().fg(match self.state {
+                            ViewerState::Active | ViewerState::Maximized => ACTIVE_COLOR,
+                            ViewerState::Unfocused => UNFOCUSED_COLOR,
+                            ViewerState::Focused => FOCUSED_COLOR,
+                        }))
+                        .bg(Color::Black),
+                );
+
+                let list = match self.state {
+                    ViewerState::Active => list
+                        .highlight_style(
+                            Style::default()
+                                .add_modifier(Modifier::ITALIC)
+                                .fg(Color::LightYellow),
+                        )
+                        .highlight_symbol(""),
+                    _ => list,
+                };
 
                 let mut list_state =
                     ListState::default().with_selected(self.conversation.selected_message);
