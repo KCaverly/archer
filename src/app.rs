@@ -61,7 +61,7 @@ impl App {
             Mode::Viewer => " i: insert; j: focus input; m: change model; q; quit; ",
             Mode::ActiveInput => " enter: send message; esc: exit input mode; ",
             Mode::ActiveViewer => {
-                " j: select next; k: select prev; c: copy; esc: exit scroll mode; "
+                " j: select next; k: select prev; c: copy; f: maximize; esc: exit scroll mode; "
             }
             Mode::ModelSelector => {
                 " j: select next; k: select prev; enter: select model; m: close; "
