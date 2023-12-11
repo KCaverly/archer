@@ -20,6 +20,7 @@ pub enum CompletionModel {
     Mistral7bInstructV01,
     Codellama34bInstruct,
     DeepseekCoder6_7bInstruct,
+    DeepseekCoder33bInstructGGUF,
 }
 
 impl CompletionModel {
@@ -39,6 +40,10 @@ impl CompletionModel {
             CompletionModel::DeepseekCoder6_7bInstruct => (
                 "kcaverly".to_string(),
                 "deepseek-coder-6.7b-instruct".to_string(),
+            ),
+            CompletionModel::DeepseekCoder33bInstructGGUF => (
+                "kcaverly".to_string(),
+                "deepseek-coder-33b-instruct-gguf".to_string(),
             ),
         }
     }
@@ -76,6 +81,33 @@ impl CompletionModel {
                 let message_str = serde_json::to_string(&message_objects).unwrap();
 
                 json!({"messages": message_str})
+            }
+            CompletionModel::DeepseekCoder33bInstructGGUF => {
+                let mut prompt = String::new();
+                let mut last_role = Role::System;
+                for message in messages {
+                    if message.role == last_role {
+                        prompt.push_str(format!("\n{}", message.content).as_str());
+                    } else {
+                        match message.role {
+                            Role::User => {
+                                prompt.push_str(
+                                    format!("\n### Instruction: {}", message.content).as_str(),
+                                );
+                            }
+                            Role::Assistant => prompt
+                                .push_str(format!("\n### Response: {}", message.content).as_str()),
+                            _ => {}
+                        }
+                    }
+                    last_role = message.role.clone();
+                }
+
+                if last_role != Role::Assistant {
+                    prompt.push_str("\n### Response: ");
+                }
+
+                json!({"prompt": prompt, "prompt_template": "{system_prompt}{prompt}"})
             }
             CompletionModel::Mistral7bInstructV01 => {
                 let mut prompt = "<s>".to_string();
