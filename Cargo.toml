@@ -34,7 +34,7 @@ tracing = "0.1.37"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "serde"] }
 async-channel = "2.1.1"
-replicate-rs = "0.8.5"
+replicate-rs = "0.8.6"
 anyhow = "1.0.75"
 reqwest = {version = "0.11.22", features = ["stream"]}
 eventsource-stream = "0.2.3"
@@ -43,3 +43,5 @@ textwrap = "0.16.0"
 strum = "0.25"
 strum_macros = "0.25"
 arboard = "3.3.0"
+uuid = { version = "1.6.1", features = ["serde"]}
+indexmap = "2.1.0"

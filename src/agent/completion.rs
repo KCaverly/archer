@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use eventsource_stream::EventStream;
 use futures::stream;
 use replicate_rs::config::ReplicateConfig;
-use replicate_rs::predictions::{PredictionClient, PredictionStatus};
+use replicate_rs::predictions::{Prediction, PredictionClient, PredictionStatus};
 use serde_json::json;
 use strum_macros::EnumIter; // 0.17.1
 
@@ -204,28 +204,23 @@ pub async fn get_completion(
     }
 }
 
-pub async fn stream_completion(
+pub async fn create_prediction(
     model: &CompletionModel,
     messages: Vec<Message>,
-) -> anyhow::Result<(
-    PredictionStatus,
-    EventStream<impl futures::stream::Stream<Item = reqwest::Result<Bytes>>>,
-)> {
+) -> anyhow::Result<Prediction> {
     let model_details = model.get_model_details();
     let inputs = model.get_inputs(&messages);
     let config = ReplicateConfig::new()?;
     let client = PredictionClient::from(config);
 
-    let mut prediction = client
-        .create(
-            model_details.0.as_str(),
-            model_details.1.as_str(),
-            inputs,
-            true,
-        )
-        .await?;
-
-    let stream = prediction.get_stream().await?;
-    let status = prediction.status;
-    anyhow::Ok((status, stream))
+    anyhow::Ok(
+        client
+            .create(
+                model_details.0.as_str(),
+                model_details.1.as_str(),
+                inputs,
+                true,
+            )
+            .await?,
+    )
 }

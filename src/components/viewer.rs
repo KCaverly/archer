@@ -13,7 +13,7 @@ use ratatui::{prelude::*, widgets::*};
 use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
-use crate::agent::completion::stream_completion;
+use crate::agent::completion::create_prediction;
 use crate::agent::conversation::Conversation;
 use crate::agent::message::{Message, Role};
 use crate::mode::Mode;
@@ -72,12 +72,12 @@ impl Component for Viewer {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::ReceiveMessage(message) => {
-                self.conversation.add_message(message);
+            Action::ReceiveMessage(id, message) => {
+                self.conversation.add_message(id, message);
             }
-            Action::StreamMessage(message) => {
+            Action::StreamMessage(id, message) => {
                 // Simply replace the last message
-                self.conversation.replace_last_message(message);
+                self.conversation.replace_message(id, message);
             }
 
             Action::SwitchMode(mode) => match mode {
@@ -139,55 +139,133 @@ impl Component for Viewer {
                 // I don't think this cloning is ideal
                 let model = message.model.clone();
                 let action_tx = self.command_tx.clone().unwrap();
-                let mut messages = self.conversation.messages.clone();
+                let mut messages =
+                    Vec::from_iter(self.conversation.messages.values().map(|x| x.clone()));
+
+                let input_uuid = self.conversation.generate_message_id();
+                let recv_uuid = self.conversation.generate_message_id();
+
                 tokio::spawn(async move {
                     action_tx
-                        .send(Action::ReceiveMessage(message.clone()))
+                        .send(Action::ReceiveMessage(input_uuid, message.clone()))
                         .await
                         .ok();
 
                     if let Some(model) = model {
                         let mut content = String::new();
-
                         action_tx
-                            .send(Action::ReceiveMessage(Message {
-                                role: Role::Assistant,
-                                content: content.clone(),
-                                status: Some(PredictionStatus::Starting),
-                                model: Some(model.clone()),
-                            }))
+                            .send(Action::ReceiveMessage(
+                                recv_uuid,
+                                Message {
+                                    role: Role::Assistant,
+                                    content: content.clone(),
+                                    status: Some(PredictionStatus::Starting),
+                                    model: Some(model.clone()),
+                                },
+                            ))
                             .await
                             .ok();
                         messages.push(message);
 
-                        let stream = stream_completion(&model, messages).await;
-                        match stream {
-                            Ok((status, mut stream)) => {
-                                while let Some(event) = stream.next().await {
-                                    match event {
-                                        Ok(event) => {
-                                            if event.event == "done" {
-                                                break;
-                                            }
-                                            content.push_str(event.data.as_str());
-                                            action_tx
-                                                .send(Action::StreamMessage(Message {
+                        let prediction = create_prediction(&model, messages.clone()).await;
+
+                        match prediction {
+                            Ok(mut prediction) => 'outer: loop {
+                                prediction.reload().await.ok();
+                                let status = prediction.get_status().await;
+                                match status {
+                                    PredictionStatus::Starting => {
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(500))
+                                            .await;
+                                    }
+                                    PredictionStatus::Canceled | PredictionStatus::Failed => {
+                                        action_tx
+                                            .send(Action::StreamMessage(
+                                                recv_uuid,
+                                                Message {
                                                     role: Role::Assistant,
                                                     content: content.clone(),
-                                                    status: None,
+                                                    status: Some(status),
                                                     model: Some(model.clone()),
-                                                }))
-                                                .await
-                                                .ok();
-                                        }
-                                        Err(err) => {
-                                            panic!("{:?}", err);
+                                                },
+                                            ))
+                                            .await
+                                            .ok();
+                                    }
+                                    PredictionStatus::Succeeded | PredictionStatus::Processing => {
+                                        let stream = prediction.get_stream().await;
+                                        match stream {
+                                            Ok(mut stream) => {
+                                                while let Some(event) = stream.next().await {
+                                                    match event {
+                                                        Ok(event) => {
+                                                            if event.event == "done" {
+                                                                action_tx
+                                                                .send(Action::StreamMessage(
+                                                                    recv_uuid,
+                                                                    Message {
+                                                                        role: Role::Assistant,
+                                                                        content: content.clone(),
+                                                                        status: Some(PredictionStatus::Succeeded),
+                                                                        model: Some(model.clone()),
+                                                                    },
+                                                                ))
+                                                                .await
+                                                                .ok();
+                                                                break 'outer;
+                                                            }
+
+                                                            content.push_str(event.data.as_str());
+                                                            action_tx
+                                                                .send(Action::StreamMessage(
+                                                                    recv_uuid,
+                                                                    Message {
+                                                                        role: Role::Assistant,
+                                                                        content: content.clone(),
+                                                                        status: Some(PredictionStatus::Processing),
+                                                                        model: Some(model.clone()),
+                                                                    },
+                                                                ))
+                                                                .await
+                                                                .ok();
+                                                        }
+                                                        Err(err) => {
+                                                            action_tx.send(Action::StreamMessage(recv_uuid, Message { role: Role::Assistant, content: err.to_string(), status: Some(PredictionStatus::Failed), model: Some(model.clone())})).await.ok();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            _ => {
+                                                action_tx
+                                                    .send(Action::StreamMessage(
+                                                        recv_uuid,
+                                                        Message {
+                                                            role: Role::Assistant,
+                                                            content: content.clone(),
+                                                            status: Some(PredictionStatus::Failed),
+                                                            model: Some(model.clone()),
+                                                        },
+                                                    ))
+                                                    .await
+                                                    .ok();
+                                                todo!();
+                                            }
                                         }
                                     }
                                 }
-                            }
+                            },
                             Err(err) => {
-                                panic!("{err}");
+                                action_tx
+                                    .send(Action::StreamMessage(
+                                        recv_uuid,
+                                        Message {
+                                            role: Role::Assistant,
+                                            content: err.to_string(),
+                                            status: Some(PredictionStatus::Failed),
+                                            model: Some(model.clone()),
+                                        },
+                                    ))
+                                    .await;
                             }
                         }
                     }
@@ -229,28 +307,45 @@ impl Component for Viewer {
                                     Style::default().fg(ASSISTANT_COLOR),
                                 ));
                             }
+
+                            if let Some(status) = message.status {
+                                let (status_str, color) = match status {
+                                    PredictionStatus::Starting => ("Starting...", Color::Blue),
+                                    PredictionStatus::Processing => {
+                                        ("Processing...", Color::LightGreen)
+                                    }
+                                    PredictionStatus::Canceled => ("Canceled.", Color::Gray),
+                                    PredictionStatus::Succeeded => {
+                                        ("Succeeded.", Color::LightGreen)
+                                    }
+                                    PredictionStatus::Failed => ("Failed.", Color::Red),
+                                };
+                                spans.push(Span::styled(
+                                    " - ",
+                                    Style::default().fg(ASSISTANT_COLOR),
+                                ));
+                                spans.push(Span::styled(status_str, Style::default().fg(color)));
+                            }
                             message_lines.push(Line::from(spans));
                         }
                     }
 
-                    for line in message.content.split("\n") {
-                        let words = WordSeparator::AsciiSpace
-                            .find_words(line)
-                            .collect::<Vec<_>>();
-                        let subs = lines_to_strings(
-                            wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
-                                .unwrap(),
-                        );
+                    message_lines.push(Line::from(vec![Span::styled(
+                        message.content,
+                        Style::default().fg(Color::White),
+                    )]));
 
-                        for sub in subs {
-                            message_lines.push(Line::from(vec![Span::styled(
-                                sub,
-                                Style::default().fg(Color::White),
-                            )]));
-                        }
-                    }
-
+                    let line_count = message_lines.len();
                     let text = Text::from(message_lines);
+
+                    let vertical_scroll = 0;
+                    let scrollbar = Scrollbar::default()
+                        .orientation(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(Some("↑"))
+                        .end_symbol(Some("↓"));
+                    let mut scrollbar_state =
+                        ScrollbarState::new(line_count).position(vertical_scroll);
+
                     let paragraph = Paragraph::new(text)
                         .block(
                             Block::default()
@@ -263,15 +358,24 @@ impl Component for Viewer {
                                 .style(Style::default().fg(ACTIVE_COLOR).bg(Color::Black)),
                         )
                         .alignment(Alignment::Left)
-                        .wrap(Wrap { trim: true });
+                        .wrap(Wrap { trim: true })
+                        .scroll((vertical_scroll as u16, 0));
                     f.render_widget(paragraph, rect);
+                    f.render_stateful_widget(
+                        scrollbar,
+                        rect.inner(&Margin {
+                            vertical: 1,
+                            horizontal: 0,
+                        }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
+                        &mut scrollbar_state,
+                    );
                 }
             }
             _ => {
                 // Render Messages
                 let mut message_items = Vec::new();
                 let mut line_count: usize = 0;
-                for message in &self.conversation.messages {
+                for (_, message) in &self.conversation.messages {
                     let mut message_lines = Vec::new();
 
                     match message.role {
@@ -297,6 +401,26 @@ impl Component for Viewer {
                                     Style::default().fg(ASSISTANT_COLOR),
                                 ));
                             }
+
+                            if let Some(status) = message.status.clone() {
+                                let (status_str, color) = match status {
+                                    PredictionStatus::Starting => ("Starting...", Color::Blue),
+                                    PredictionStatus::Processing => {
+                                        ("Processing...", Color::LightGreen)
+                                    }
+                                    PredictionStatus::Canceled => ("Canceled.", Color::Gray),
+                                    PredictionStatus::Succeeded => {
+                                        ("Succeeded.", Color::LightGreen)
+                                    }
+                                    PredictionStatus::Failed => ("Failed.", Color::Red),
+                                };
+                                spans.push(Span::styled(
+                                    " - ",
+                                    Style::default().fg(ASSISTANT_COLOR),
+                                ));
+                                spans.push(Span::styled(status_str, Style::default().fg(color)));
+                            }
+
                             message_lines.push(Line::from(spans));
                         }
                     }

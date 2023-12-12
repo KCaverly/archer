@@ -1,4 +1,5 @@
 use std::fmt;
+use uuid::Uuid;
 
 use serde::{
     de::{self, Deserializer, Visitor},
@@ -22,8 +23,8 @@ pub enum Action {
     Error(String),
     Help,
     SendMessage(Message),
-    ReceiveMessage(Message),
-    StreamMessage(Message),
+    ReceiveMessage(Uuid, Message),
+    StreamMessage(Uuid, Message),
     SelectNextMessage,
     SelectPreviousMessage,
     DeleteSelectedMessage,

@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use crate::{
     action::Action,
     agent::{
-        completion::{get_completion, stream_completion, CompletionModel},
+        completion::{get_completion, CompletionModel},
         conversation::Conversation,
         message::{Message, Role},
     },

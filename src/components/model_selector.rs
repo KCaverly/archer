@@ -13,7 +13,7 @@ use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
 
 use super::Component;
-use crate::agent::completion::{stream_completion, CompletionModel};
+use crate::agent::completion::CompletionModel;
 use crate::agent::conversation::Conversation;
 use crate::agent::message::{Message, Role};
 use crate::styles::{
