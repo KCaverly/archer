@@ -257,20 +257,19 @@ impl Component for Viewer {
                                                     }
                                                 }
                                             }
-                                            _ => {
+                                            Err(err) => {
                                                 action_tx
                                                     .send(Action::StreamMessage(
                                                         recv_uuid,
                                                         Message {
                                                             role: Role::Assistant,
-                                                            content: content.clone(),
+                                                            content: err.to_string(),
                                                             status: Some(PredictionStatus::Failed),
                                                             model: Some(model.clone()),
                                                         },
                                                     ))
                                                     .await
                                                     .ok();
-                                                todo!();
                                             }
                                         }
                                     }

@@ -1,3 +1,4 @@
+use dirs::home_dir;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -10,7 +11,15 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-pub(crate) const CONVERSATION_DIR: &str = "/home/kcaverly/.llmit/conversations/";
+pub(crate) const CONVERSATION_DIR: &str = ".llmit/conversations/";
+
+fn get_conversation_dir() -> PathBuf {
+    if let Some(conversation_dir) = home_dir().and_then(|x| Some(x.join(CONVERSATION_DIR))) {
+        conversation_dir
+    } else {
+        PathBuf::from(CONVERSATION_DIR)
+    }
+}
 
 pub struct ConversationManager {
     pub conversation_files: IndexMap<Uuid, PathBuf>,
@@ -22,7 +31,8 @@ impl Default for ConversationManager {
     fn default() -> Self {
         // Load existing Conversations
         let mut conversation_files = IndexMap::<Uuid, PathBuf>::new();
-        for entry in WalkDir::new(CONVERSATION_DIR) {
+        let conversation_dir = get_conversation_dir();
+        for entry in WalkDir::new(conversation_dir) {
             if let Some(entry) = entry.ok() {
                 if entry.path().is_dir() {
                     continue;
@@ -81,7 +91,8 @@ impl ConversationManager {
     }
 
     pub(crate) fn get_file_path(&self, id: &Uuid) -> PathBuf {
-        let directory = PathBuf::from(CONVERSATION_DIR);
+        let conversation_dir = get_conversation_dir();
+        let directory = PathBuf::from(conversation_dir);
         let file_path = directory.join(format!("{}.json", id));
         file_path
     }
@@ -149,7 +160,8 @@ pub struct Conversation {
 
 impl Conversation {
     pub fn get_file_path(&self) -> PathBuf {
-        let directory = PathBuf::from(CONVERSATION_DIR);
+        let conversation_dir = get_conversation_dir();
+        let directory = PathBuf::from(conversation_dir);
         let file_path = directory.join(format!("{}.json", self.id));
         file_path
     }
@@ -164,9 +176,10 @@ impl Conversation {
     }
 
     pub(crate) fn save(&self) -> anyhow::Result<()> {
+        let conversation_dir = get_conversation_dir();
         let data = serde_json::to_string(self)?;
         let file_path = self.get_file_path();
-        let directory = PathBuf::from(CONVERSATION_DIR);
+        let directory = PathBuf::from(conversation_dir);
 
         tokio::spawn(async move {
             tokio::fs::create_dir_all(directory).await?;

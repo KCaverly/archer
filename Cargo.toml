@@ -46,3 +46,4 @@ arboard = "3.3.0"
 uuid = { version = "1.6.1", features = ["serde", "std", "v7", "v4", "fast-rng"]}
 indexmap = { version = "2.1.0", features = ["serde"]}
 walkdir = "2.4.0"
+dirs = "5.0.1"
