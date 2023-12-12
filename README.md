@@ -24,5 +24,4 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 
 ### Roadmap
 
-In the near term, I am looking to polish the existing experience. Namely, expanding the status notification system to illustrate cold boot progress, better error handling, along with better formatting for code.
-Longer term, I would like to integrate a few magic commands, to serve as a full features terminal assistant with directory RAG based functionality.
+Concurrent requests, status updating, and error handling took a big step forward in the last few days. Most of the fundamental functionality, is in place. Up next, I would like to tackle better formatting for code, and saving/loading conversations.
