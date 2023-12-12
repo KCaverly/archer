@@ -7,7 +7,7 @@ use serde::{
 };
 
 use crate::{
-    agent::{completion::CompletionModel, message::Message},
+    agent::{completion::CompletionModel, conversation::Conversation, message::Message},
     mode::Mode,
 };
 
@@ -37,6 +37,12 @@ pub enum Action {
     SwitchModel(CompletionModel),
     SwitchToSelectedModel,
     SwitchKeymap(String),
+    SaveActiveConversation,
+    SelectPreviousConversation,
+    SelectNextConversation,
+    LoadSelectedConversation,
+    LoadConversation(Uuid),
+    AddConversationToManager(Conversation),
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -73,6 +79,10 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectPreviousModel" => Ok(Action::SelectPreviousModel),
                     "SelectNextModel" => Ok(Action::SelectNextModel),
                     "SwitchToSelectedModel" => Ok(Action::SwitchToSelectedModel),
+                    "SaveActiveConversation" => Ok(Action::SaveActiveConversation),
+                    "SelectPreviousConversation" => Ok(Action::SelectPreviousConversation),
+                    "SelectNextConversation" => Ok(Action::SelectNextConversation),
+                    "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {
@@ -82,6 +92,9 @@ impl<'de> Deserialize<'de> for Action {
                             "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
                             "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
                             "MessageViewer" => Ok(Action::SwitchMode(Mode::MessageViewer)),
+                            "ConversationManager" => {
+                                Ok(Action::SwitchMode(Mode::ConversationManager))
+                            }
                             _ => Err(E::custom(format!("invalid Action Variant: {:?}", mode))),
                         }
                     }

@@ -24,4 +24,4 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 
 ### Roadmap
 
-Concurrent requests, status updating, and error handling took a big step forward in the last few days. Most of the fundamental functionality, is in place. Up next, I would like to tackle better formatting for code, and saving/loading conversations.
+Concurrent requests, status updating, and error handling took a big step forward in the last few days. Most of the fundamental functionality is in place. Up next, I would like to tackle better formatting for code, and saving/loading conversations.

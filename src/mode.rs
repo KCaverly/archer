@@ -9,4 +9,5 @@ pub enum Mode {
     ActiveViewer,
     ModelSelector,
     MessageViewer,
+    ConversationManager,
 }

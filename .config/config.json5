@@ -11,6 +11,8 @@
         "<j>": "SwitchMode(Input)",
         "<i>": "SwitchMode(ActiveViewer)",
         "<m>": "SwitchMode(ModelSelector)",
+        "<c>": "SwitchMode(ConversationManager)",
+
       },
     "ActiveViewer": {
         // Universal Keybindings
@@ -49,6 +51,7 @@
         "<k>": "SwitchMode(Viewer)",
         "<i>": "SwitchMode(ActiveInput)",
         "<m>": "SwitchMode(ModelSelector)",
+        "<c>": "SwitchMode(ConversationManager)",
       },
     "ActiveInput": {
         // Universal Keybindings
@@ -71,6 +74,20 @@
         "<j>": "SelectNextModel",
         "<k>": "SelectPreviousModel",
         "<enter>": "SwitchToSelectedModel",
+      },
+    "ConversationManager": {
+        // Universal Keybindings
+        "<q>": "Quit",
+        "<Ctrl-d>": "Quit",
+        "<Ctrl-c>": "Quit",
+        "<Ctrl-z>": "Suspend",
+
+        "<ESC>": "RevertMode",
+        "<c>": "RevertMode",
+        "<j>": "SelectNextConversation",
+        "<k>": "SelectPreviousConversation",
+        "<enter>": "LoadSelectedConversation",
       }
   }
+  
 }

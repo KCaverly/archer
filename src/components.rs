@@ -9,6 +9,7 @@ use crate::{
     tui::{Event, Frame},
 };
 
+pub mod conversation_manager;
 pub mod input;
 pub mod model_selector;
 pub mod viewer;

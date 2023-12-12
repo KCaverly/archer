@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::agent::message::{Message, Role};
 use anyhow::anyhow;
@@ -10,7 +10,7 @@ use replicate_rs::predictions::{Prediction, PredictionClient, PredictionStatus};
 use serde_json::json;
 use strum_macros::EnumIter; // 0.17.1
 
-#[derive(Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
+#[derive(Deserialize, Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     #[default]
     Yi34bChat,

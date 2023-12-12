@@ -1,20 +1,157 @@
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use super::message::Message;
 use anyhow::anyhow;
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+use walkdir::WalkDir;
 
-#[derive(Default)]
+pub(crate) const CONVERSATION_DIR: &str = "/home/kcaverly/.llmit/conversations/";
+
+pub struct ConversationManager {
+    pub conversation_files: IndexMap<Uuid, PathBuf>,
+    pub active_conversation: usize,
+    pub selected_conversation: usize,
+}
+
+impl Default for ConversationManager {
+    fn default() -> Self {
+        // Load existing Conversations
+        let mut conversation_files = IndexMap::<Uuid, PathBuf>::new();
+        for entry in WalkDir::new(CONVERSATION_DIR) {
+            if let Some(entry) = entry.ok() {
+                if entry.path().is_dir() {
+                    continue;
+                }
+                let path = PathBuf::from(entry.clone().path());
+                path.file_stem().and_then(|x| x.to_str()).and_then(|x| {
+                    let id = Uuid::from_str(x);
+                    match id {
+                        Ok(id) => {
+                            conversation_files.insert(id, path.clone());
+                        }
+                        Err(err) => {
+                            panic!("{:?}, {:?}", path.file_stem(), err);
+                        }
+                    }
+
+                    Some(())
+                });
+            }
+        }
+
+        ConversationManager {
+            conversation_files,
+            active_conversation: 0,
+            selected_conversation: 0,
+        }
+    }
+}
+
+impl ConversationManager {
+    pub(crate) fn load_conversation(&mut self, id: &Uuid) -> anyhow::Result<Conversation> {
+        let file_path = self.get_file_path(id);
+        let contents = std::fs::read_to_string(file_path.as_path())?;
+        let convo: Conversation = serde_json::from_str(contents.as_str())?;
+
+        anyhow::Ok(convo)
+    }
+
+    pub(crate) fn new_conversation(&mut self) -> Conversation {
+        let id = Uuid::now_v7();
+        let convo = Conversation {
+            id,
+            messages: IndexMap::<Uuid, Message>::new(),
+            selected_message: None,
+        };
+
+        self.conversation_files
+            .insert(convo.id, convo.get_file_path());
+
+        convo
+    }
+
+    pub(crate) fn add_conversation(&mut self, conversation: Conversation) {
+        self.conversation_files
+            .insert(conversation.id, conversation.get_file_path());
+    }
+
+    pub(crate) fn get_file_path(&self, id: &Uuid) -> PathBuf {
+        let directory = PathBuf::from(CONVERSATION_DIR);
+        let file_path = directory.join(format!("{}.json", id));
+        file_path
+    }
+
+    pub(crate) fn load_selected_conversation(&mut self) -> anyhow::Result<Conversation> {
+        let ids = self
+            .conversation_files
+            .keys()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect::<Vec<Uuid>>();
+
+        if let Some(id) = ids.get(self.selected_conversation) {
+            self.activate_selected_conversation();
+            return self.load_conversation(id);
+        } else {
+            return Err(anyhow!("Conversation not available"));
+        }
+    }
+
+    pub(crate) fn set_active_conversation(&mut self, conversation: &Conversation) {
+        self.active_conversation = self
+            .conversation_files
+            .keys()
+            .into_iter()
+            .position(|x| x == &conversation.id)
+            .unwrap();
+    }
+
+    pub(crate) fn activate_selected_conversation(&mut self) {
+        self.active_conversation = self.selected_conversation;
+    }
+
+    pub(crate) fn delete_conversation(&self) -> anyhow::Result<()> {
+        todo!();
+    }
+
+    pub(crate) fn select_next_conversation(&mut self) {
+        if self.selected_conversation < (self.conversation_files.len() - 1) {
+            self.selected_conversation += 1;
+        }
+    }
+
+    pub(crate) fn list_conversations(&mut self) -> Vec<String> {
+        self.conversation_files
+            .keys()
+            .into_iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+    }
+
+    pub(crate) fn select_prev_conversation(&mut self) {
+        if self.selected_conversation > 0 {
+            self.selected_conversation -= 1;
+        }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct Conversation {
+    pub id: Uuid,
     pub messages: IndexMap<Uuid, Message>,
     pub selected_message: Option<usize>,
 }
 
 impl Conversation {
-    pub fn new() -> Self {
-        Conversation {
-            messages: IndexMap::<Uuid, Message>::new(),
-            selected_message: None,
-        }
+    pub fn get_file_path(&self) -> PathBuf {
+        let directory = PathBuf::from(CONVERSATION_DIR);
+        let file_path = directory.join(format!("{}.json", self.id));
+        file_path
     }
 
     pub fn generate_message_id(&self) -> Uuid {
@@ -26,6 +163,20 @@ impl Conversation {
         self.select_last_message();
     }
 
+    pub(crate) fn save(&self) -> anyhow::Result<()> {
+        let data = serde_json::to_string(self)?;
+        let file_path = self.get_file_path();
+        let directory = PathBuf::from(CONVERSATION_DIR);
+
+        tokio::spawn(async move {
+            tokio::fs::create_dir_all(directory).await?;
+            let mut file = File::create(file_path).await?;
+            file.write_all(data.as_bytes()).await?;
+            anyhow::Ok(())
+        });
+
+        anyhow::Ok(())
+    }
     pub fn delete_selected_message(&mut self) {
         if let Some(Some(uuid)) = self.selected_message.map(|idx| self.get_uuid_by_index(idx)) {
             self.messages.remove(&uuid);

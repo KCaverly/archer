@@ -14,7 +14,10 @@ use crate::{
         conversation::Conversation,
         message::{Message, Role},
     },
-    components::{input::MessageInput, model_selector::ModelSelector, viewer::Viewer, Component},
+    components::{
+        conversation_manager::ConversationSelector, input::MessageInput,
+        model_selector::ModelSelector, viewer::Viewer, Component,
+    },
     config::Config,
     mode::Mode,
     tui,
@@ -41,10 +44,16 @@ impl App {
         let config = Config::new()?;
         let mode = Mode::Input;
         let model_selector = ModelSelector::new();
+        let conversation_manager = ConversationSelector::default();
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![Box::new(viewer), Box::new(input), Box::new(model_selector)],
+            components: vec![
+                Box::new(viewer),
+                Box::new(input),
+                Box::new(model_selector),
+                Box::new(conversation_manager),
+            ],
             should_quit: false,
             should_suspend: false,
             config,
@@ -67,6 +76,9 @@ impl App {
                 " j: select next; k: select prev; enter: select model; m: close; "
             }
             Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all message; ",
+            Mode::ConversationManager => {
+                " j: select next; k: select prev; enter: load conversation; esc: close panel; "
+            }
         }
         .to_string();
     }
@@ -178,7 +190,9 @@ impl App {
 
                             viewer_layout = layout1[0];
                             input_layout = layout1[1];
-                            if self.mode == Mode::ModelSelector {
+                            if self.mode == Mode::ModelSelector
+                                || self.mode == Mode::ConversationManager
+                            {
                                 let layout2 = Layout::default()
                                     .direction(Direction::Horizontal)
                                     .constraints(vec![
@@ -213,15 +227,38 @@ impl App {
                             }
 
                             if let Some(selector_layout) = selector_layout {
-                                let r = self.components[2].draw(f, selector_layout);
-                                if let Err(e) = r {
-                                    let action_tx = action_tx.clone();
-                                    tokio::spawn(async move {
-                                        action_tx
-                                            .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                            .await
-                                            .unwrap();
-                                    });
+                                match self.mode {
+                                    Mode::ConversationManager => {
+                                        let r = self.components[3].draw(f, selector_layout);
+                                        if let Err(e) = r {
+                                            let action_tx = action_tx.clone();
+                                            tokio::spawn(async move {
+                                                action_tx
+                                                    .send(Action::Error(format!(
+                                                        "Failed to draw: {:?}",
+                                                        e
+                                                    )))
+                                                    .await
+                                                    .unwrap();
+                                            });
+                                        }
+                                    }
+                                    Mode::ModelSelector => {
+                                        let r = self.components[2].draw(f, selector_layout);
+                                        if let Err(e) = r {
+                                            let action_tx = action_tx.clone();
+                                            tokio::spawn(async move {
+                                                action_tx
+                                                    .send(Action::Error(format!(
+                                                        "Failed to draw: {:?}",
+                                                        e
+                                                    )))
+                                                    .await
+                                                    .unwrap();
+                                            });
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         })?;

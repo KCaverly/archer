@@ -14,7 +14,7 @@ use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
 use crate::agent::completion::create_prediction;
-use crate::agent::conversation::Conversation;
+use crate::agent::conversation::{Conversation, ConversationManager};
 use crate::agent::message::{Message, Role};
 use crate::mode::Mode;
 use crate::styles::{
@@ -39,6 +39,7 @@ pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
     conversation: Conversation,
+    manager: ConversationManager,
     state: ViewerState,
     keymap: String,
 }
@@ -51,9 +52,14 @@ impl Viewer {
             ViewerState::Unfocused
         };
 
+        let mut manager = ConversationManager::default();
+        let conversation = manager.new_conversation();
+
         Self {
             state,
             keymap,
+            manager,
+            conversation,
             ..Default::default()
         }
     }
@@ -79,7 +85,11 @@ impl Component for Viewer {
                 // Simply replace the last message
                 self.conversation.replace_message(id, message);
             }
-
+            Action::LoadSelectedConversation => {
+                if let Some(convo) = self.manager.load_selected_conversation().ok() {
+                    self.conversation = convo;
+                }
+            }
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer => {
                     self.state = ViewerState::Focused;
@@ -93,16 +103,25 @@ impl Component for Viewer {
                     self.state = ViewerState::Unfocused;
                     self.conversation.unfocus();
                 }
-                Mode::Input => {
-                    self.state = ViewerState::Unfocused;
-                }
-                Mode::ActiveInput => {
+                Mode::Input | Mode::ActiveInput | Mode::ConversationManager => {
                     self.state = ViewerState::Unfocused;
                 }
                 Mode::MessageViewer => {
                     self.state = ViewerState::Maximized;
                 }
             },
+            Action::SaveActiveConversation => {
+                self.conversation.save().ok();
+                let convo = self.conversation.clone();
+                if let Some(action_tx) = self.command_tx.clone() {
+                    tokio::spawn(async move {
+                        action_tx
+                            .send(Action::AddConversationToManager(convo))
+                            .await
+                            .ok();
+                    });
+                }
+            }
             Action::SelectNextMessage => {
                 self.conversation.select_next_message();
             }
@@ -212,6 +231,9 @@ impl Component for Viewer {
                                                                 ))
                                                                 .await
                                                                 .ok();
+
+                                                                action_tx.send(Action::SaveActiveConversation).await.ok();
+
                                                                 break 'outer;
                                                             }
 
