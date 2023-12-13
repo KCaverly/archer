@@ -94,6 +94,12 @@ impl Component for Viewer {
                     self.conversation = convo;
                 }
             }
+            Action::SelectNextConversation => {
+                self.manager.select_next_conversation();
+            }
+            Action::SelectPreviousConversation => {
+                self.manager.select_prev_conversation();
+            }
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer => {
                     self.state = ViewerState::Focused;

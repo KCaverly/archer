@@ -228,9 +228,8 @@ impl Conversation {
 
     pub fn select_next_message(&mut self) {
         if let Some(currently_selected) = self.selected_message {
-            let next_selected = currently_selected + 1;
-            if next_selected < self.messages.len() {
-                self.selected_message = Some(next_selected);
+            if currently_selected < (self.messages.len() - 1) {
+                self.selected_message = Some(currently_selected + 1);
             }
         } else {
             self.selected_message = Some(0);
