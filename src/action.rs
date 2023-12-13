@@ -43,6 +43,7 @@ pub enum Action {
     LoadSelectedConversation,
     LoadConversation(Uuid),
     AddConversationToManager(Conversation),
+    NewConversation,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -83,6 +84,7 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectPreviousConversation" => Ok(Action::SelectPreviousConversation),
                     "SelectNextConversation" => Ok(Action::SelectNextConversation),
                     "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),
+                    "NewConversation" => Ok(Action::NewConversation),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {

@@ -81,6 +81,10 @@ impl Component for Viewer {
             Action::ReceiveMessage(id, message) => {
                 self.conversation.add_message(id, message);
             }
+            Action::NewConversation => {
+                let convo = self.manager.new_conversation();
+                self.conversation = convo;
+            }
             Action::StreamMessage(id, message) => {
                 // Simply replace the last message
                 self.conversation.replace_message(id, message);

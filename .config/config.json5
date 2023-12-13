@@ -86,6 +86,7 @@
         "<c>": "RevertMode",
         "<j>": "SelectNextConversation",
         "<k>": "SelectPreviousConversation",
+        "<n>": "NewConversation",
         "<enter>": "LoadSelectedConversation",
       }
   }

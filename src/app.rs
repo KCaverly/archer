@@ -77,7 +77,7 @@ impl App {
             }
             Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all message; ",
             Mode::ConversationManager => {
-                " j: select next; k: select prev; enter: load conversation; esc: close panel; "
+                " j: select next; k: select prev; n: new convo; enter: load convo ; esc: close panel; "
             }
         }
         .to_string();
