@@ -39,8 +39,8 @@ pub struct App {
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
         let keymap = " i: insert; k: focus viewer; m: change model; q: quit; ".to_string();
-        let viewer = Viewer::new(false, keymap.clone());
-        let input = MessageInput::new(true);
+        let viewer = Viewer::new(false);
+        let input = MessageInput::new(true, keymap.clone());
         let config = Config::new()?;
         let mode = Mode::Input;
         let model_selector = ModelSelector::new();
@@ -75,9 +75,9 @@ impl App {
             Mode::ModelSelector => {
                 " j: select next; k: select prev; enter: select model; m: close; "
             }
-            Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all message; ",
+            Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all messages; ",
             Mode::ConversationManager => {
-                " j: select next; k: select prev; n: new convo; enter: load convo ; esc: close panel; "
+                " j: select next; k: select prev; n: new convo; enter: load convo; esc: close panel; "
             }
         }
         .to_string();

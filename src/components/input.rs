@@ -32,10 +32,11 @@ pub struct MessageInput<'a> {
     slash_command: bool,
     state: InputState,
     active_model: CompletionModel,
+    keymap: String,
 }
 
 impl MessageInput<'static> {
-    pub fn new(focused: bool) -> Self {
+    pub fn new(focused: bool, keymap: String) -> Self {
         let state = if focused {
             InputState::Focused
         } else {
@@ -43,6 +44,7 @@ impl MessageInput<'static> {
         };
         Self {
             state,
+            keymap,
             ..Default::default()
         }
     }
@@ -109,6 +111,9 @@ impl Component for MessageInput<'static> {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
+            Action::SwitchKeymap(keymap) => {
+                self.keymap = keymap;
+            }
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer
                 | Mode::ActiveViewer
@@ -142,6 +147,11 @@ impl Component for MessageInput<'static> {
                     .title(
                         Title::from(format!(" Message ({model_owner}/{model_name}) "))
                             .alignment(Alignment::Left),
+                    )
+                    .title(
+                        Title::from(self.keymap.clone())
+                            .alignment(Alignment::Center)
+                            .position(Position::Bottom),
                     )
                     .borders(Borders::ALL)
                     .border_type(BorderType::Thick)

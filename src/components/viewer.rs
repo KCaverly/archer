@@ -41,12 +41,11 @@ pub struct Viewer {
     conversation: Conversation,
     manager: ConversationManager,
     state: ViewerState,
-    keymap: String,
     current_scroll: usize,
 }
 
 impl Viewer {
-    pub fn new(focused: bool, keymap: String) -> Self {
+    pub fn new(focused: bool) -> Self {
         let state = if focused {
             ViewerState::Focused
         } else {
@@ -58,7 +57,6 @@ impl Viewer {
 
         Self {
             state,
-            keymap,
             manager,
             conversation,
             ..Default::default()
@@ -141,9 +139,6 @@ impl Component for Viewer {
             }
             Action::DeleteSelectedMessage => {
                 self.conversation.delete_selected_message();
-            }
-            Action::SwitchKeymap(keymap) => {
-                self.keymap = keymap;
             }
             Action::CopySelectedMessage => {
                 let selected_message = self.conversation.get_selected_message().unwrap();
@@ -521,7 +516,6 @@ impl Component for Viewer {
                 let list = List::new(message_items.clone()).block(
                     Block::default()
                         .title(Title::from(" Conversation ").alignment(Alignment::Left))
-                        .title(Title::from(self.keymap.clone()).alignment(Alignment::Right))
                         .borders(Borders::ALL)
                         .border_type(BorderType::Thick)
                         .style(Style::default().fg(match self.state {
