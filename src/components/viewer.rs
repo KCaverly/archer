@@ -361,10 +361,12 @@ impl Component for Viewer {
                         }
                     }
 
-                    message_lines.push(Line::from(vec![Span::styled(
-                        message.content,
-                        Style::default().fg(Color::White),
-                    )]));
+                    for line in message.content.split("\n") {
+                        message_lines.push(Line::from(vec![Span::styled(
+                            line,
+                            Style::default().fg(Color::White),
+                        )]));
+                    }
 
                     let line_count = message_lines.len();
                     let text = Text::from(message_lines);
