@@ -205,6 +205,10 @@ impl Conversation {
         }
     }
 
+    pub fn get_position(&self) -> (usize, usize) {
+        (self.messages.len(), self.selected_message.unwrap_or(0))
+    }
+
     pub fn get_uuid_by_index(&self, id: usize) -> Option<Uuid> {
         Vec::from_iter(self.messages.keys()).get(id).map(|x| **x)
     }

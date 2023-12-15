@@ -42,6 +42,7 @@ pub struct Viewer {
     manager: ConversationManager,
     state: ViewerState,
     keymap: String,
+    current_scroll: usize,
 }
 
 impl Viewer {
@@ -505,13 +506,18 @@ impl Component for Viewer {
                     message_lines
                         .push(Line::from(vec![Span::styled(break_line, Style::default())]));
 
+                    if let Some(selected_uuid) = selected_uuid {
+                        if id == &selected_uuid {
+                            self.current_scroll = line_count;
+                        }
+                    }
+
                     line_count = message_lines.len();
 
                     // Add seperator to the bottom of the message
                     message_items.push(ListItem::new(Text::from(message_lines)));
                 }
 
-                let vertical_scroll = 0;
                 let list = List::new(message_items.clone()).block(
                     Block::default()
                         .title(Title::from(" Conversation ").alignment(Alignment::Left))
@@ -540,11 +546,19 @@ impl Component for Viewer {
                 let mut list_state =
                     ListState::default().with_selected(self.conversation.selected_message);
 
+                let (mut message_count, selected_message) = self.conversation.get_position();
+                message_count = if message_count > 0 {
+                    message_count - 1
+                } else {
+                    0
+                };
+
                 let scrollbar = Scrollbar::default()
                     .orientation(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(Some("↑"))
                     .end_symbol(Some("↓"));
-                let mut scrollbar_state = ScrollbarState::new(line_count).position(vertical_scroll);
+                let mut scrollbar_state = ScrollbarState::new(message_count * rect.height as usize)
+                    .position(selected_message * rect.height as usize);
 
                 f.render_stateful_widget(list, rect, &mut list_state);
                 f.render_stateful_widget(
