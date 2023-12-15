@@ -309,6 +309,7 @@ impl Component for Viewer {
 
     fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
         let mut visible_lines = rect.height as usize;
+        let selected_uuid = self.conversation.get_selected_uuid();
 
         match self.state {
             ViewerState::Maximized => {
@@ -408,7 +409,7 @@ impl Component for Viewer {
                 // Render Messages
                 let mut message_items = Vec::new();
                 let mut line_count: usize = 0;
-                for (_, message) in &self.conversation.messages {
+                for (id, message) in &self.conversation.messages {
                     let mut message_lines = Vec::new();
 
                     match message.role {
@@ -458,7 +459,11 @@ impl Component for Viewer {
                         }
                     }
 
-                    visible_lines -= message_lines.len();
+                    visible_lines = if visible_lines >= message_lines.len() {
+                        visible_lines - message_lines.len()
+                    } else {
+                        visible_lines
+                    };
 
                     'outer: for line in message.content.split("\n") {
                         let words = WordSeparator::AsciiSpace
@@ -470,12 +475,14 @@ impl Component for Viewer {
                         );
 
                         for sub in subs {
-                            if visible_lines <= 2 {
-                                message_lines.push(Line::from(vec![Span::styled(
-                                    "...",
-                                    Style::default().fg(Color::White),
-                                )]));
-                                break 'outer;
+                            if let Some(selected_uuid) = selected_uuid {
+                                if visible_lines <= 1 && id == &selected_uuid {
+                                    message_lines.push(Line::from(vec![Span::styled(
+                                        "...",
+                                        Style::default().fg(Color::White),
+                                    )]));
+                                    break 'outer;
+                                }
                             }
 
                             message_lines.push(Line::from(vec![Span::styled(
@@ -483,7 +490,11 @@ impl Component for Viewer {
                                 Style::default().fg(Color::White),
                             )]));
 
-                            visible_lines -= 1;
+                            if let Some(selected_uuid) = selected_uuid {
+                                if visible_lines > 0 && id == &selected_uuid {
+                                    visible_lines -= 1;
+                                }
+                            }
                         }
                     }
 

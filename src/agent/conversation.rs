@@ -197,6 +197,14 @@ impl Conversation {
         }
     }
 
+    pub fn get_selected_uuid(&self) -> Option<Uuid> {
+        if let Some(selected_id) = self.selected_message {
+            self.get_uuid_by_index(selected_id)
+        } else {
+            None
+        }
+    }
+
     pub fn get_uuid_by_index(&self, id: usize) -> Option<Uuid> {
         Vec::from_iter(self.messages.keys()).get(id).map(|x| **x)
     }
