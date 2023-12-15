@@ -38,7 +38,8 @@ pub struct App {
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
-        let keymap = " i: insert; k: focus viewer; m: change model; q: quit; ".to_string();
+        let keymap =
+            " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
         let viewer = Viewer::new(false);
         let input = MessageInput::new(true, keymap.clone());
         let config = Config::new()?;
@@ -66,8 +67,8 @@ impl App {
 
     pub fn set_keymap(&mut self) {
         self.keymap = match self.mode {
-            Mode::Input => " i: insert; k: focus viewer; m: change model; q: quit; ",
-            Mode::Viewer => " i: insert; j: focus input; m: change model; q; quit; ",
+            Mode::Input => " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ",
+            Mode::Viewer => " i: insert; j: focus input; m: change model; c: change convo; q; quit; ",
             Mode::ActiveInput => " enter: send message; esc: exit input mode; ",
             Mode::ActiveViewer => {
                 " j: select next; k: select prev; c: copy; f: maximize; esc: exit scroll mode; "
