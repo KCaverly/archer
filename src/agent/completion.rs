@@ -13,6 +13,7 @@ use strum_macros::EnumIter; // 0.17.1
 #[derive(Deserialize, Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     #[default]
+    Dolphin2_5Mixtral8x7b,
     Yi34bChat,
     Llama2_13bChat,
     Llama2_70bChat,
@@ -26,6 +27,10 @@ pub enum CompletionModel {
 impl CompletionModel {
     pub fn get_model_details(&self) -> (String, String) {
         match self {
+            CompletionModel::Dolphin2_5Mixtral8x7b => (
+                "kcaverly".to_string(),
+                "dolphin-2.5-mixtral-8x7b-gguf".to_string(),
+            ),
             CompletionModel::Yi34bChat => ("01-ai".to_string(), "yi-34b-chat".to_string()),
             CompletionModel::Llama2_13bChat => ("meta".to_string(), "llama-2-13b-chat".to_string()),
             CompletionModel::Llama2_70bChat => ("meta".to_string(), "llama-2-70b-chat".to_string()),
@@ -50,6 +55,37 @@ impl CompletionModel {
 
     pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
         match self {
+            CompletionModel::Dolphin2_5Mixtral8x7b => {
+                let mut system_prompt = "You are Dolphin, a helpful AI assistant.".to_string();
+                let mut prompt = String::new();
+
+                for message in messages {
+                    match message.role {
+                        Role::System => {
+                            system_prompt.push_str(message.content.as_str());
+                        }
+                        Role::User => {
+                            prompt.push_str(
+                                format!(
+                                    "<|im_start|>user\n{}<|im_end|>\n",
+                                    message.content.as_str()
+                                )
+                                .as_str(),
+                            );
+                        }
+                        Role::Assistant => {
+                            prompt.push_str(
+                                format!("<|im_start|>assistant\n{}<|im_end|>\n", message.content)
+                                    .as_str(),
+                            );
+                        }
+                    }
+                }
+
+                prompt.push_str("<|im_start|>assistant");
+
+                json!({"prompt": prompt, "system_prompt": system_prompt, "prompt_template": "<|im_start|>system\n{system_prompt}<|im_end|>\n{prompt}"})
+            }
             CompletionModel::Yi34bChat => {
                 let mut prompt = String::new();
                 for message in messages {
