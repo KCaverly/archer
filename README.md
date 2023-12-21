@@ -22,6 +22,27 @@ To interact with models you will need to set your [Replicate API Key](https://re
 
 LLMit has only been tested on Linux systems. While all functionality is intended to work cross-platform, there may be concerns working with the clipboard on different platforms. If there are any concerns, please file an Issue.
 
-### Roadmap
+### Roadmap to v0
 
-Concurrent requests, status updating, and error handling took a big step forward in the last few days. Most of the fundamental functionality is in place. Up next, I would like to tackle better formatting for code, and saving/loading conversations.
+#### Stability
+- [x] Concurrent requests
+- [x] Status updating
+- [x] Better error handling
+- [x] All message scrolling
+- [ ] Focused message scrolling
+
+#### Quality of Life
+- [ ] Dynamic layouts for smaller screens
+- [ ] Better formatting for code
+- [ ] Manage for missing api keys early
+
+#### General Features
+- [x] Switching models
+- [x] Copy message
+- [x] Saving/Loading conversations
+- [ ] Convo titles
+- [ ] Logging panel
+
+#### Release
+- [ ] Work out proper versioning
+- [ ] Ci/Cd
