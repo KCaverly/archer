@@ -9,6 +9,7 @@ use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
 
 use color_eyre::eyre::Result;
+use indexmap::IndexMap;
 use ratatui::{prelude::*, widgets::*};
 use replicate_rs::predictions::PredictionStatus;
 
@@ -177,13 +178,13 @@ impl Component for Viewer {
                         .ok();
 
                     if let Some(model) = model {
-                        let mut content = String::new();
+                        let mut content_map = IndexMap::<String, String>::new();
                         action_tx
                             .send(Action::ReceiveMessage(
                                 recv_uuid,
                                 Message {
                                     role: Role::Assistant,
-                                    content: content.clone(),
+                                    content: "".to_string(),
                                     status: Some(PredictionStatus::Starting),
                                     model: Some(model.clone()),
                                 },
@@ -204,6 +205,13 @@ impl Component for Viewer {
                                             .await;
                                     }
                                     PredictionStatus::Canceled | PredictionStatus::Failed => {
+                                        let content = content_map
+                                            .values()
+                                            .into_iter()
+                                            .map(|x| x.as_str())
+                                            .collect::<Vec<&str>>()
+                                            .join("");
+
                                         action_tx
                                             .send(Action::StreamMessage(
                                                 recv_uuid,
@@ -225,12 +233,18 @@ impl Component for Viewer {
                                                     match event {
                                                         Ok(event) => {
                                                             if event.event == "done" {
+                                                                let content = content_map
+                                                                    .values()
+                                                                    .into_iter()
+                                                                    .map(|x| x.as_str())
+                                                                    .collect::<Vec<&str>>()
+                                                                    .join("");
                                                                 action_tx
                                                                 .send(Action::StreamMessage(
                                                                     recv_uuid,
                                                                     Message {
                                                                         role: Role::Assistant,
-                                                                        content: content.clone(),
+                                                                        content,
                                                                         status: Some(PredictionStatus::Succeeded),
                                                                         model: Some(model.clone()),
                                                                     },
@@ -243,13 +257,21 @@ impl Component for Viewer {
                                                                 break 'outer;
                                                             }
 
-                                                            content.push_str(event.data.as_str());
+                                                            content_map
+                                                                .insert(event.id, event.data);
+                                                            let content = content_map
+                                                                .values()
+                                                                .into_iter()
+                                                                .map(|x| x.as_str())
+                                                                .collect::<Vec<&str>>()
+                                                                .join("");
+
                                                             action_tx
                                                                 .send(Action::StreamMessage(
                                                                     recv_uuid,
                                                                     Message {
                                                                         role: Role::Assistant,
-                                                                        content: content.clone(),
+                                                                        content,
                                                                         status: Some(PredictionStatus::Processing),
                                                                         model: Some(model.clone()),
                                                                     },
