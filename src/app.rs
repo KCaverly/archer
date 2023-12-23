@@ -1,3 +1,4 @@
+use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use std::sync::Arc;
 
 use async_channel::Sender;
@@ -106,6 +107,15 @@ impl App {
         self.conversation.replace_message(uuid, message);
     }
 
+    fn load_conversation(&mut self, conversation: Conversation) {
+        self.conversation = conversation;
+    }
+
+    fn new_conversation(&mut self) {
+        let convo = Conversation::new();
+        self.conversation = convo;
+    }
+
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let model = message.model;
         let mut messages = self
@@ -202,7 +212,7 @@ impl App {
                                                             .ok();
 
                                                         action_tx
-                                                            .send(Action::SaveActiveConversation)
+                                                            .send(Action::SaveConversation)
                                                             .await
                                                             .ok();
                                                         break 'outer;
@@ -329,9 +339,40 @@ impl App {
                     Action::Quit => self.should_quit = true,
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
+                    Action::NewConversation => self.new_conversation(),
+                    Action::LoadConversation(convo) => self.load_conversation(convo),
                     Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
+                    Action::FocusConversation => self.conversation.focus(),
+                    Action::UnfocusConversation => self.conversation.unfocus(),
+                    Action::SelectNextMessage => self.conversation.select_next_message(),
+                    Action::SelectPreviousMessage => self.conversation.select_prev_message(),
+                    Action::DeleteSelectedMessage => {
+                        self.conversation.delete_selected_message();
+                    }
+                    Action::CopySelectedMessage => {
+                        let selected_message = self.conversation.get_selected_message().unwrap();
+
+                        let content = selected_message.content.clone();
+
+                        #[cfg(any(target_os = "linux"))]
+                        tokio::spawn(async move {
+                            let mut ctx = Clipboard::new().unwrap();
+                            let _ = ctx
+                                .set()
+                                .wait()
+                                .clipboard(LinuxClipboardKind::Clipboard)
+                                .text(content.clone());
+                        });
+
+                        let content = selected_message.content.clone();
+                        let mut ctx = Clipboard::new()?;
+                        let _ = ctx.set().text(content);
+                    }
+                    Action::SaveConversation => {
+                        self.conversation.save();
+                    }
                     Action::Resize(w, h) => {
                         // This isnt painting with the same render layout as below, so we should
                         // reconcile this at some point.

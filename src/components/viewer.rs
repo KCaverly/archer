@@ -1,4 +1,3 @@
-use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use futures::StreamExt;
 use ratatui::widgets::block::Title;
 use std::str::from_utf8;
@@ -39,7 +38,6 @@ enum ViewerState {
 pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    conversation: Conversation,
     manager: ConversationManager,
     state: ViewerState,
     current_scroll: usize,
@@ -54,12 +52,10 @@ impl Viewer {
         };
 
         let mut manager = ConversationManager::default();
-        let conversation = manager.new_conversation();
 
         Self {
             state,
             manager,
-            conversation,
             ..Default::default()
         }
     }
@@ -78,15 +74,6 @@ impl Component for Viewer {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::NewConversation => {
-                let convo = self.manager.new_conversation();
-                self.conversation = convo;
-            }
-            Action::LoadSelectedConversation => {
-                if let Some(convo) = self.manager.load_selected_conversation().ok() {
-                    self.conversation = convo;
-                }
-            }
             Action::SelectNextConversation => {
                 self.manager.select_next_conversation();
             }
@@ -96,15 +83,27 @@ impl Component for Viewer {
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer => {
                     self.state = ViewerState::Focused;
-                    self.conversation.unfocus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::UnfocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::ActiveViewer => {
                     self.state = ViewerState::Active;
-                    self.conversation.focus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::FocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::ModelSelector => {
                     self.state = ViewerState::Unfocused;
-                    self.conversation.unfocus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::UnfocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::Input | Mode::ActiveInput | Mode::ConversationManager => {
                     self.state = ViewerState::Unfocused;
@@ -113,46 +112,6 @@ impl Component for Viewer {
                     self.state = ViewerState::Maximized;
                 }
             },
-            Action::SaveActiveConversation => {
-                self.conversation.save().ok();
-                let convo = self.conversation.clone();
-                if let Some(action_tx) = self.command_tx.clone() {
-                    tokio::spawn(async move {
-                        action_tx
-                            .send(Action::AddConversationToManager(convo))
-                            .await
-                            .ok();
-                    });
-                }
-            }
-            Action::SelectNextMessage => {
-                self.conversation.select_next_message();
-            }
-            Action::SelectPreviousMessage => {
-                self.conversation.select_prev_message();
-            }
-            Action::DeleteSelectedMessage => {
-                self.conversation.delete_selected_message();
-            }
-            Action::CopySelectedMessage => {
-                let selected_message = self.conversation.get_selected_message().unwrap();
-
-                let content = selected_message.content.clone();
-
-                #[cfg(any(target_os = "linux"))]
-                tokio::spawn(async move {
-                    let mut ctx = Clipboard::new().unwrap();
-                    let _ = ctx
-                        .set()
-                        .wait()
-                        .clipboard(LinuxClipboardKind::Clipboard)
-                        .text(content.clone());
-                });
-
-                let content = selected_message.content.clone();
-                let mut ctx = Clipboard::new()?;
-                let _ = ctx.set().text(content);
-            }
             _ => {}
         }
         Ok(None)
