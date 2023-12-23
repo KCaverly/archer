@@ -1,16 +1,21 @@
+use std::sync::Arc;
+
+use async_channel::Sender;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use indexmap::IndexMap;
 use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 use replicate_rs::predictions::PredictionStatus;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
+use uuid::Uuid;
 
 use crate::{
     action::Action,
     agent::{
-        completion::{get_completion, CompletionModel},
+        completion::{create_prediction, get_completion, CompletionModel},
         conversation::Conversation,
         message::{Message, Role},
     },
@@ -34,10 +39,12 @@ pub struct App {
     pub last_mode: Mode,
     pub last_tick_key_events: Vec<KeyEvent>,
     pub keymap: String,
+    pub conversation: Conversation,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
+        let conversation = Conversation::new();
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
         let viewer = Viewer::new(false);
@@ -62,6 +69,7 @@ impl App {
             last_mode: mode,
             last_tick_key_events: Vec::new(),
             keymap,
+            conversation,
         })
     }
 
@@ -88,6 +96,171 @@ impl App {
         self.last_mode = self.mode;
         self.mode = mode;
         self.set_keymap();
+    }
+
+    fn receive_message(&mut self, uuid: Uuid, message: Message) {
+        self.conversation.add_message(uuid, message);
+    }
+
+    fn stream_message(&mut self, uuid: Uuid, message: Message) {
+        self.conversation.replace_message(uuid, message);
+    }
+
+    fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
+        let model = message.model;
+        let mut messages = self
+            .conversation
+            .messages
+            .values()
+            .map(|x| x.clone())
+            .collect::<Vec<Message>>();
+
+        let input_uuid = self.conversation.generate_message_id();
+        let recv_uuid = self.conversation.generate_message_id();
+
+        tokio::spawn(async move {
+            action_tx
+                .send(Action::ReceiveMessage(input_uuid, message.clone()))
+                .await
+                .ok();
+
+            if let Some(model) = model {
+                let mut content_map = IndexMap::<String, String>::new();
+                action_tx
+                    .send(Action::ReceiveMessage(
+                        recv_uuid,
+                        Message {
+                            role: Role::Assistant,
+                            content: "".to_string(),
+                            status: Some(PredictionStatus::Starting),
+                            model: Some(model.clone()),
+                        },
+                    ))
+                    .await
+                    .ok();
+
+                messages.push(message);
+
+                let prediction = create_prediction(&model, messages).await;
+                match prediction {
+                    Ok(mut prediction) => 'outer: loop {
+                        prediction.reload().await.ok();
+                        let status = prediction.get_status().await;
+                        match status {
+                            PredictionStatus::Starting => {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                            }
+                            PredictionStatus::Failed | PredictionStatus::Canceled => {
+                                let content = content_map
+                                    .values()
+                                    .into_iter()
+                                    .map(|x| x.as_str())
+                                    .collect::<Vec<&str>>()
+                                    .join("");
+
+                                action_tx
+                                    .send(Action::StreamMessage(
+                                        recv_uuid,
+                                        Message {
+                                            role: Role::Assistant,
+                                            content: content.clone(),
+                                            status: Some(status),
+                                            model: Some(model.clone()),
+                                        },
+                                    ))
+                                    .await
+                                    .ok();
+                            }
+                            PredictionStatus::Succeeded | PredictionStatus::Processing => {
+                                let stream = prediction.get_stream().await;
+                                match stream {
+                                    Ok(mut stream) => {
+                                        while let Some(event) = stream.next().await {
+                                            match event {
+                                                Ok(event) => {
+                                                    if event.event == "done" {
+                                                        let content = content_map
+                                                            .values()
+                                                            .into_iter()
+                                                            .map(|x| x.as_str())
+                                                            .collect::<Vec<&str>>()
+                                                            .join("");
+
+                                                        action_tx
+                                                            .send(Action::StreamMessage(
+                                                                recv_uuid,
+                                                                Message {
+                                                                    role: Role::Assistant,
+                                                                    content,
+                                                                    status: Some(
+                                                                        PredictionStatus::Succeeded,
+                                                                    ),
+                                                                    model: Some(model.clone()),
+                                                                },
+                                                            ))
+                                                            .await
+                                                            .ok();
+
+                                                        action_tx
+                                                            .send(Action::SaveActiveConversation)
+                                                            .await
+                                                            .ok();
+                                                        break 'outer;
+                                                    }
+
+                                                    content_map.insert(event.id, event.data);
+                                                    let content = content_map
+                                                        .values()
+                                                        .into_iter()
+                                                        .map(|x| x.as_str())
+                                                        .collect::<Vec<&str>>()
+                                                        .join("");
+
+                                                    action_tx
+                                                        .send(Action::StreamMessage(
+                                                            recv_uuid,
+                                                            Message {
+                                                                role: Role::Assistant,
+                                                                content,
+                                                                status: Some(
+                                                                    PredictionStatus::Processing,
+                                                                ),
+                                                                model: Some(model.clone()),
+                                                            },
+                                                        ))
+                                                        .await
+                                                        .ok();
+                                                }
+                                                Err(err) => {
+                                                    action_tx
+                                                        .send(Action::StreamMessage(
+                                                            recv_uuid,
+                                                            Message {
+                                                                role: Role::Assistant,
+                                                                content: err.to_string(),
+                                                                status: Some(
+                                                                    PredictionStatus::Failed,
+                                                                ),
+                                                                model: Some(model.clone()),
+                                                            },
+                                                        ))
+                                                        .await
+                                                        .ok();
+                                                }
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    },
+                    Err(err) => {
+                        todo!();
+                    }
+                }
+            }
+        });
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -156,24 +329,31 @@ impl App {
                     Action::Quit => self.should_quit = true,
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
+                    Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
+                    Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
+                    Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
                     Action::Resize(w, h) => {
-                        tui.resize(Rect::new(0, 0, w, h))?;
-                        tui.draw(|f| {
-                            for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.size());
-                                if let Err(e) = r {
-                                    let action_tx = action_tx.clone();
-                                    tokio::spawn(async move {
-                                        action_tx
-                                            .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                            .await
-                                            .unwrap();
-                                    });
-                                }
-                            }
-                        })?;
+                        // This isnt painting with the same render layout as below, so we should
+                        // reconcile this at some point.
+                        // todo!();
+                        // tui.resize(Rect::new(0, 0, w, h))?;
+                        // tui.draw(|f| {
+                        //     for component in self.components.iter_mut() {
+                        //         let r = component.draw(f, f.size());
+                        //         if let Err(e) = r {
+                        //             let action_tx = action_tx.clone();
+                        //             tokio::spawn(async move {
+                        //                 action_tx
+                        //                     .send(Action::Error(format!("Failed to draw: {:?}", e)))
+                        //                     .await
+                        //                     .unwrap();
+                        //             });
+                        //         }
+                        //     }
+                        // })?;
                     }
                     Action::Render => {
+                        let conversation = &self.conversation;
                         tui.draw(|f| {
                             let rect = f.size();
 
@@ -205,7 +385,7 @@ impl App {
                                 selector_layout = Some(layout2[1]);
                             }
 
-                            let r = self.components[0].draw(f, viewer_layout);
+                            let r = self.components[0].draw(f, viewer_layout, conversation);
                             if let Err(e) = r {
                                 let action_tx = action_tx.clone();
                                 tokio::spawn(async move {
@@ -216,7 +396,7 @@ impl App {
                                 });
                             }
 
-                            let r = self.components[1].draw(f, input_layout);
+                            let r = self.components[1].draw(f, input_layout, conversation);
                             if let Err(e) = r {
                                 let action_tx = action_tx.clone();
                                 tokio::spawn(async move {
@@ -230,7 +410,11 @@ impl App {
                             if let Some(selector_layout) = selector_layout {
                                 match self.mode {
                                     Mode::ConversationManager => {
-                                        let r = self.components[3].draw(f, selector_layout);
+                                        let r = self.components[3].draw(
+                                            f,
+                                            selector_layout,
+                                            conversation,
+                                        );
                                         if let Err(e) = r {
                                             let action_tx = action_tx.clone();
                                             tokio::spawn(async move {
@@ -245,7 +429,11 @@ impl App {
                                         }
                                     }
                                     Mode::ModelSelector => {
-                                        let r = self.components[2].draw(f, selector_layout);
+                                        let r = self.components[2].draw(
+                                            f,
+                                            selector_layout,
+                                            conversation,
+                                        );
                                         if let Err(e) = r {
                                             let action_tx = action_tx.clone();
                                             tokio::spawn(async move {

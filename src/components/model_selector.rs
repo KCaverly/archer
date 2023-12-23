@@ -88,7 +88,7 @@ impl Component for ModelSelector {
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
+    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect, conversation: &Conversation) -> Result<()> {
         let mut items = Vec::new();
         for model_variant in CompletionModel::iter() {
             let (model_owner, model_name) = model_variant.get_model_details();

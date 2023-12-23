@@ -69,7 +69,7 @@ impl Component for ConversationSelector {
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
+    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect, conversation: &Conversation) -> Result<()> {
         let mut items = Vec::new();
         for id in self.manager.list_conversations() {
             items.push(ListItem::new(id.to_string()));

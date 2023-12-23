@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 
 use crate::{
     action::Action,
+    agent::conversation::Conversation,
     config::Config,
     tui::{Event, Frame},
 };
@@ -122,5 +123,5 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()>;
+    fn draw(&mut self, f: &mut Frame<'_>, area: Rect, conversation: &Conversation) -> Result<()>;
 }

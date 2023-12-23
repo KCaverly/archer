@@ -159,6 +159,13 @@ pub struct Conversation {
 }
 
 impl Conversation {
+    pub fn new() -> Self {
+        Conversation {
+            id: Uuid::now_v7(),
+            messages: IndexMap::<Uuid, Message>::new(),
+            selected_message: None,
+        }
+    }
     pub fn get_file_path(&self) -> PathBuf {
         let conversation_dir = get_conversation_dir();
         let directory = PathBuf::from(conversation_dir);
