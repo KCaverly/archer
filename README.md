@@ -40,7 +40,7 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 - [x] Switching models
 - [x] Copy message
 - [x] Saving/Loading conversations
-- [ ] Convo titles
+- [x] Convo titles
 - [ ] Logging panel
 
 #### Release
