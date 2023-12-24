@@ -21,8 +21,14 @@ fn get_conversation_dir() -> PathBuf {
     }
 }
 
+#[derive(Clone)]
+pub struct ConversationMetadata {
+    path: PathBuf,
+    title: String,
+}
+
 pub struct ConversationManager {
-    pub conversation_files: IndexMap<Uuid, PathBuf>,
+    pub conversation_files: IndexMap<Uuid, ConversationMetadata>,
     pub active_conversation: usize,
     pub selected_conversation: usize,
 }
@@ -30,27 +36,28 @@ pub struct ConversationManager {
 impl Default for ConversationManager {
     fn default() -> Self {
         // Load existing Conversations
-        let mut conversation_files = IndexMap::<Uuid, PathBuf>::new();
+        let mut conversation_files = IndexMap::<Uuid, ConversationMetadata>::new();
         let conversation_dir = get_conversation_dir();
         for entry in WalkDir::new(conversation_dir) {
             if let Some(entry) = entry.ok() {
                 if entry.path().is_dir() {
                     continue;
                 }
-                let path = PathBuf::from(entry.clone().path());
-                path.file_stem().and_then(|x| x.to_str()).and_then(|x| {
-                    let id = Uuid::from_str(x);
-                    match id {
-                        Ok(id) => {
-                            conversation_files.insert(id, path.clone());
-                        }
-                        Err(err) => {
-                            panic!("{:?}, {:?}", path.file_stem(), err);
-                        }
-                    }
 
-                    Some(())
-                });
+                let path = PathBuf::from(entry.clone().path());
+                if let Some(contents) = std::fs::read_to_string(path.clone()).ok() {
+                    let convo: Result<Conversation, serde_json::Error> =
+                        serde_json::from_str(contents.as_str());
+                    if let Some(convo) = convo.ok() {
+                        conversation_files.insert(
+                            convo.id,
+                            ConversationMetadata {
+                                path,
+                                title: convo.title.unwrap_or(convo.id.to_string()),
+                            },
+                        );
+                    }
+                }
             }
         }
 
@@ -73,21 +80,24 @@ impl ConversationManager {
 
     pub(crate) fn new_conversation(&mut self) -> Conversation {
         let id = Uuid::now_v7();
-        let convo = Conversation {
-            id,
-            messages: IndexMap::<Uuid, Message>::new(),
-            selected_message: None,
+        let convo = Conversation::new();
+
+        let metadata = ConversationMetadata {
+            path: convo.get_file_path(),
+            title: id.to_string(),
         };
 
-        self.conversation_files
-            .insert(convo.id, convo.get_file_path());
+        self.conversation_files.insert(convo.id, metadata);
 
         convo
     }
 
     pub(crate) fn add_conversation(&mut self, conversation: Conversation) {
-        self.conversation_files
-            .insert(conversation.id, conversation.get_file_path());
+        let metadata = ConversationMetadata {
+            path: conversation.get_file_path(),
+            title: conversation.title.unwrap_or(conversation.id.to_string()),
+        };
+        self.conversation_files.insert(conversation.id, metadata);
     }
 
     pub(crate) fn get_file_path(&self, id: &Uuid) -> PathBuf {
@@ -144,10 +154,29 @@ impl ConversationManager {
             .collect::<Vec<String>>()
     }
 
+    pub(crate) fn list_titles(&self) -> Vec<String> {
+        self.conversation_files
+            .values()
+            .into_iter()
+            .map(|metadata| metadata.title.clone())
+            .collect::<Vec<String>>()
+    }
+
     pub(crate) fn select_prev_conversation(&mut self) {
         if self.selected_conversation > 0 {
             self.selected_conversation -= 1;
         }
+    }
+
+    pub(crate) fn update_conversation(&mut self, conversation: Conversation) {
+        let metadata = ConversationMetadata {
+            path: conversation.get_file_path(),
+            title: conversation.title.unwrap_or(conversation.id.to_string()),
+        };
+        *self
+            .conversation_files
+            .entry(conversation.id)
+            .or_insert(metadata.clone()) = metadata.clone();
     }
 }
 
@@ -156,6 +185,7 @@ pub struct Conversation {
     pub id: Uuid,
     pub messages: IndexMap<Uuid, Message>,
     pub selected_message: Option<usize>,
+    pub title: Option<String>,
 }
 
 impl Conversation {
@@ -164,6 +194,7 @@ impl Conversation {
             id: Uuid::now_v7(),
             messages: IndexMap::<Uuid, Message>::new(),
             selected_message: None,
+            title: None,
         }
     }
     pub fn get_file_path(&self) -> PathBuf {

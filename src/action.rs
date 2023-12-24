@@ -45,6 +45,8 @@ pub enum Action {
     UnfocusConversation,
     NewConversation,
     SaveConversation,
+    SetTitle(String),
+    UpdateTitle(String),
 }
 
 impl<'de> Deserialize<'de> for Action {

@@ -110,6 +110,33 @@ impl App {
         self.conversation.replace_message(uuid, message);
     }
 
+    fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
+        let title_model = CompletionModel::Mistral7bInstructV01;
+        let system_prompt = "You are a helpful assistant, who title user queries.";
+        let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
+
+An example is as follows:
+User: Please walk me through the 3 hardest parts to learning rust
+Answer: Hard parts of learning rust
+
+Please only provide the title and nothing else, keep the answer succinct, under 10 words preferably.
+
+The message to title is as follows:
+User: {}
+", first_message);
+
+        let messages = vec![
+            Message::system_message(system_prompt.to_string(), Some(title_model)),
+            Message::user_message(prompt.to_string(), Some(title_model)),
+        ];
+
+        tokio::spawn(async move {
+            if let Some(result) = get_completion(title_model, messages).await.ok() {
+                action_tx.send(Action::SetTitle(result.content)).await.ok();
+            }
+        });
+    }
+
     fn load_conversation(&mut self, conversation: Conversation) {
         self.conversation = conversation;
     }
@@ -120,6 +147,7 @@ impl App {
     }
 
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
+        let first_message = self.conversation.messages.len() == 0;
         let model = message.model;
         let mut messages = self
             .conversation
@@ -136,6 +164,13 @@ impl App {
                 .send(Action::ReceiveMessage(input_uuid, message.clone()))
                 .await
                 .ok();
+
+            if first_message {
+                action_tx
+                    .send(Action::UpdateTitle(message.content.clone()))
+                    .await
+                    .ok();
+            }
 
             if let Some(model) = model {
                 let mut content_map = IndexMap::<String, String>::new();
@@ -350,6 +385,14 @@ impl App {
                     Action::UnfocusConversation => self.conversation.unfocus(),
                     Action::SelectNextMessage => self.conversation.select_next_message(),
                     Action::SelectPreviousMessage => self.conversation.select_prev_message(),
+                    Action::SetTitle(title) => {
+                        self.conversation.title = Some(title);
+                        action_tx.send(Action::SaveConversation).await.ok();
+                        self.manager.update_conversation(self.conversation.clone());
+                    }
+                    Action::UpdateTitle(first_message) => {
+                        self.update_title(action_tx.clone(), first_message)
+                    }
                     Action::DeleteSelectedMessage => {
                         self.conversation.delete_selected_message();
                     }

@@ -64,8 +64,8 @@ impl Component for ConversationSelector {
         manager: &ConversationManager,
     ) -> Result<()> {
         let mut items = Vec::new();
-        for id in manager.list_conversations() {
-            items.push(ListItem::new(id.to_string()));
+        for title in manager.list_titles() {
+            items.push(ListItem::new(title));
         }
 
         let paragraph = List::new(items)
