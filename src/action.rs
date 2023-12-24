@@ -37,13 +37,14 @@ pub enum Action {
     SwitchModel(CompletionModel),
     SwitchToSelectedModel,
     SwitchKeymap(String),
-    SaveActiveConversation,
     SelectPreviousConversation,
     SelectNextConversation,
     LoadSelectedConversation,
-    LoadConversation(Uuid),
     AddConversationToManager(Conversation),
+    FocusConversation,
+    UnfocusConversation,
     NewConversation,
+    SaveConversation,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -80,7 +81,6 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectPreviousModel" => Ok(Action::SelectPreviousModel),
                     "SelectNextModel" => Ok(Action::SelectNextModel),
                     "SwitchToSelectedModel" => Ok(Action::SwitchToSelectedModel),
-                    "SaveActiveConversation" => Ok(Action::SaveActiveConversation),
                     "SelectPreviousConversation" => Ok(Action::SelectPreviousConversation),
                     "SelectNextConversation" => Ok(Action::SelectNextConversation),
                     "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),

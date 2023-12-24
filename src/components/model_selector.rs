@@ -14,7 +14,7 @@ use textwrap::WordSeparator;
 
 use super::Component;
 use crate::agent::completion::CompletionModel;
-use crate::agent::conversation::Conversation;
+use crate::agent::conversation::{Conversation, ConversationManager};
 use crate::agent::message::{Message, Role};
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
@@ -88,7 +88,13 @@ impl Component for ModelSelector {
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()> {
         let mut items = Vec::new();
         for model_variant in CompletionModel::iter() {
             let (model_owner, model_name) = model_variant.get_model_details();

@@ -1,4 +1,3 @@
-use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use futures::StreamExt;
 use ratatui::widgets::block::Title;
 use std::str::from_utf8;
@@ -39,8 +38,6 @@ enum ViewerState {
 pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    conversation: Conversation,
-    manager: ConversationManager,
     state: ViewerState,
     current_scroll: usize,
 }
@@ -53,13 +50,8 @@ impl Viewer {
             ViewerState::Unfocused
         };
 
-        let mut manager = ConversationManager::default();
-        let conversation = manager.new_conversation();
-
         Self {
             state,
-            manager,
-            conversation,
             ..Default::default()
         }
     }
@@ -78,40 +70,30 @@ impl Component for Viewer {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::ReceiveMessage(id, message) => {
-                self.conversation.add_message(id, message);
-            }
-            Action::NewConversation => {
-                let convo = self.manager.new_conversation();
-                self.conversation = convo;
-            }
-            Action::StreamMessage(id, message) => {
-                // Simply replace the last message
-                self.conversation.replace_message(id, message);
-            }
-            Action::LoadSelectedConversation => {
-                if let Some(convo) = self.manager.load_selected_conversation().ok() {
-                    self.conversation = convo;
-                }
-            }
-            Action::SelectNextConversation => {
-                self.manager.select_next_conversation();
-            }
-            Action::SelectPreviousConversation => {
-                self.manager.select_prev_conversation();
-            }
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer => {
                     self.state = ViewerState::Focused;
-                    self.conversation.unfocus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::UnfocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::ActiveViewer => {
                     self.state = ViewerState::Active;
-                    self.conversation.focus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::FocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::ModelSelector => {
                     self.state = ViewerState::Unfocused;
-                    self.conversation.unfocus();
+                    if let Some(action_tx) = self.command_tx.clone() {
+                        tokio::spawn(async move {
+                            action_tx.send(Action::UnfocusConversation).await.ok()
+                        });
+                    }
                 }
                 Mode::Input | Mode::ActiveInput | Mode::ConversationManager => {
                     self.state = ViewerState::Unfocused;
@@ -120,218 +102,24 @@ impl Component for Viewer {
                     self.state = ViewerState::Maximized;
                 }
             },
-            Action::SaveActiveConversation => {
-                self.conversation.save().ok();
-                let convo = self.conversation.clone();
-                if let Some(action_tx) = self.command_tx.clone() {
-                    tokio::spawn(async move {
-                        action_tx
-                            .send(Action::AddConversationToManager(convo))
-                            .await
-                            .ok();
-                    });
-                }
-            }
-            Action::SelectNextMessage => {
-                self.conversation.select_next_message();
-            }
-            Action::SelectPreviousMessage => {
-                self.conversation.select_prev_message();
-            }
-            Action::DeleteSelectedMessage => {
-                self.conversation.delete_selected_message();
-            }
-            Action::CopySelectedMessage => {
-                let selected_message = self.conversation.get_selected_message().unwrap();
-
-                let content = selected_message.content.clone();
-
-                #[cfg(any(target_os = "linux"))]
-                tokio::spawn(async move {
-                    let mut ctx = Clipboard::new().unwrap();
-                    let _ = ctx
-                        .set()
-                        .wait()
-                        .clipboard(LinuxClipboardKind::Clipboard)
-                        .text(content.clone());
-                });
-
-                let content = selected_message.content.clone();
-                let mut ctx = Clipboard::new()?;
-                let _ = ctx.set().text(content);
-            }
-            Action::SendMessage(message) => {
-                // Lets clean this up at some point
-                // I don't think this cloning is ideal
-                let model = message.model.clone();
-                let action_tx = self.command_tx.clone().unwrap();
-                let mut messages =
-                    Vec::from_iter(self.conversation.messages.values().map(|x| x.clone()));
-
-                let input_uuid = self.conversation.generate_message_id();
-                let recv_uuid = self.conversation.generate_message_id();
-
-                tokio::spawn(async move {
-                    action_tx
-                        .send(Action::ReceiveMessage(input_uuid, message.clone()))
-                        .await
-                        .ok();
-
-                    if let Some(model) = model {
-                        let mut content_map = IndexMap::<String, String>::new();
-                        action_tx
-                            .send(Action::ReceiveMessage(
-                                recv_uuid,
-                                Message {
-                                    role: Role::Assistant,
-                                    content: "".to_string(),
-                                    status: Some(PredictionStatus::Starting),
-                                    model: Some(model.clone()),
-                                },
-                            ))
-                            .await
-                            .ok();
-                        messages.push(message);
-
-                        let prediction = create_prediction(&model, messages.clone()).await;
-
-                        match prediction {
-                            Ok(mut prediction) => 'outer: loop {
-                                prediction.reload().await.ok();
-                                let status = prediction.get_status().await;
-                                match status {
-                                    PredictionStatus::Starting => {
-                                        tokio::time::sleep(tokio::time::Duration::from_millis(500))
-                                            .await;
-                                    }
-                                    PredictionStatus::Canceled | PredictionStatus::Failed => {
-                                        let content = content_map
-                                            .values()
-                                            .into_iter()
-                                            .map(|x| x.as_str())
-                                            .collect::<Vec<&str>>()
-                                            .join("");
-
-                                        action_tx
-                                            .send(Action::StreamMessage(
-                                                recv_uuid,
-                                                Message {
-                                                    role: Role::Assistant,
-                                                    content: content.clone(),
-                                                    status: Some(status),
-                                                    model: Some(model.clone()),
-                                                },
-                                            ))
-                                            .await
-                                            .ok();
-                                    }
-                                    PredictionStatus::Succeeded | PredictionStatus::Processing => {
-                                        let stream = prediction.get_stream().await;
-                                        match stream {
-                                            Ok(mut stream) => {
-                                                while let Some(event) = stream.next().await {
-                                                    match event {
-                                                        Ok(event) => {
-                                                            if event.event == "done" {
-                                                                let content = content_map
-                                                                    .values()
-                                                                    .into_iter()
-                                                                    .map(|x| x.as_str())
-                                                                    .collect::<Vec<&str>>()
-                                                                    .join("");
-                                                                action_tx
-                                                                .send(Action::StreamMessage(
-                                                                    recv_uuid,
-                                                                    Message {
-                                                                        role: Role::Assistant,
-                                                                        content,
-                                                                        status: Some(PredictionStatus::Succeeded),
-                                                                        model: Some(model.clone()),
-                                                                    },
-                                                                ))
-                                                                .await
-                                                                .ok();
-
-                                                                action_tx.send(Action::SaveActiveConversation).await.ok();
-
-                                                                break 'outer;
-                                                            }
-
-                                                            content_map
-                                                                .insert(event.id, event.data);
-                                                            let content = content_map
-                                                                .values()
-                                                                .into_iter()
-                                                                .map(|x| x.as_str())
-                                                                .collect::<Vec<&str>>()
-                                                                .join("");
-
-                                                            action_tx
-                                                                .send(Action::StreamMessage(
-                                                                    recv_uuid,
-                                                                    Message {
-                                                                        role: Role::Assistant,
-                                                                        content,
-                                                                        status: Some(PredictionStatus::Processing),
-                                                                        model: Some(model.clone()),
-                                                                    },
-                                                                ))
-                                                                .await
-                                                                .ok();
-                                                        }
-                                                        Err(err) => {
-                                                            action_tx.send(Action::StreamMessage(recv_uuid, Message { role: Role::Assistant, content: err.to_string(), status: Some(PredictionStatus::Failed), model: Some(model.clone())})).await.ok();
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            Err(err) => {
-                                                action_tx
-                                                    .send(Action::StreamMessage(
-                                                        recv_uuid,
-                                                        Message {
-                                                            role: Role::Assistant,
-                                                            content: err.to_string(),
-                                                            status: Some(PredictionStatus::Failed),
-                                                            model: Some(model.clone()),
-                                                        },
-                                                    ))
-                                                    .await
-                                                    .ok();
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            Err(err) => {
-                                action_tx
-                                    .send(Action::StreamMessage(
-                                        recv_uuid,
-                                        Message {
-                                            role: Role::Assistant,
-                                            content: err.to_string(),
-                                            status: Some(PredictionStatus::Failed),
-                                            model: Some(model.clone()),
-                                        },
-                                    ))
-                                    .await;
-                            }
-                        }
-                    }
-                });
-            }
             _ => {}
         }
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()> {
         let mut visible_lines = rect.height as usize;
-        let selected_uuid = self.conversation.get_selected_uuid();
+        let selected_uuid = conversation.get_selected_uuid();
 
         match self.state {
             ViewerState::Maximized => {
-                if let Some(message) = self.conversation.get_selected_message().ok() {
+                if let Some(message) = conversation.get_selected_message().ok() {
                     let mut message_lines = Vec::new();
 
                     match message.role {
@@ -427,7 +215,7 @@ impl Component for Viewer {
                 // Render Messages
                 let mut message_items = Vec::new();
                 let mut line_count: usize = 0;
-                for (id, message) in &self.conversation.messages {
+                for (id, message) in &conversation.messages {
                     let mut message_lines = Vec::new();
 
                     match message.role {
@@ -560,9 +348,9 @@ impl Component for Viewer {
                 };
 
                 let mut list_state =
-                    ListState::default().with_selected(self.conversation.selected_message);
+                    ListState::default().with_selected(conversation.selected_message);
 
-                let (mut message_count, selected_message) = self.conversation.get_position();
+                let (mut message_count, selected_message) = conversation.get_position();
                 message_count = if message_count > 0 {
                     message_count - 1
                 } else {

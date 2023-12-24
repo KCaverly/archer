@@ -36,7 +36,6 @@ pub struct ConversationMeta {
 pub struct ConversationSelector {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    manager: ConversationManager,
 }
 
 impl Component for ConversationSelector {
@@ -52,26 +51,20 @@ impl Component for ConversationSelector {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::SelectPreviousConversation => {
-                self.manager.select_prev_conversation();
-            }
-            Action::SelectNextConversation => {
-                self.manager.select_next_conversation();
-            }
-            Action::LoadSelectedConversation => {
-                self.manager.activate_selected_conversation();
-            }
-            Action::AddConversationToManager(convo) => {
-                self.manager.add_conversation(convo);
-            }
             _ => {}
         }
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect) -> Result<()> {
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()> {
         let mut items = Vec::new();
-        for id in self.manager.list_conversations() {
+        for id in manager.list_conversations() {
             items.push(ListItem::new(id.to_string()));
         }
 
@@ -92,7 +85,7 @@ impl Component for ConversationSelector {
             .highlight_symbol("");
 
         let mut list_state =
-            ListState::default().with_selected(Some(self.manager.selected_conversation));
+            ListState::default().with_selected(Some(manager.selected_conversation));
         f.render_stateful_widget(paragraph, rect, &mut list_state);
         Ok(())
     }
