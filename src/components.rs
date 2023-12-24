@@ -5,12 +5,12 @@ use ratatui::layout::Rect;
 
 use crate::{
     action::Action,
-    agent::conversation::Conversation,
+    agent::conversation::{Conversation, ConversationManager},
     config::Config,
     tui::{Event, Frame},
 };
 
-pub mod conversation_manager;
+pub mod conversation_selector;
 pub mod input;
 pub mod model_selector;
 pub mod viewer;
@@ -123,5 +123,11 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
-    fn draw(&mut self, f: &mut Frame<'_>, area: Rect, conversation: &Conversation) -> Result<()>;
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        area: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()>;
 }

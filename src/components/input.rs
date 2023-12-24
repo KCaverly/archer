@@ -8,7 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
 use crate::agent::completion::CompletionModel;
-use crate::agent::conversation::Conversation;
+use crate::agent::conversation::{Conversation, ConversationManager};
 use crate::agent::message::{Message, Role};
 use crate::config::{Config, KeyBindings};
 use crate::mode::Mode;
@@ -139,7 +139,13 @@ impl Component for MessageInput<'static> {
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect, conversation: &Conversation) -> Result<()> {
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()> {
         let text = Text::from(Line::from(self.display_spans.clone()));
         let (model_owner, model_name) = self.active_model.get_model_details();
         let paragraph = Paragraph::new(text)

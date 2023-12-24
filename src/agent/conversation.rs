@@ -136,7 +136,7 @@ impl ConversationManager {
         }
     }
 
-    pub(crate) fn list_conversations(&mut self) -> Vec<String> {
+    pub(crate) fn list_conversations(&self) -> Vec<String> {
         self.conversation_files
             .keys()
             .into_iter()

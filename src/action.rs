@@ -40,7 +40,6 @@ pub enum Action {
     SelectPreviousConversation,
     SelectNextConversation,
     LoadSelectedConversation,
-    LoadConversation(Conversation),
     AddConversationToManager(Conversation),
     FocusConversation,
     UnfocusConversation,

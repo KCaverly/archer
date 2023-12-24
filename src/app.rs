@@ -17,11 +17,11 @@ use crate::{
     action::Action,
     agent::{
         completion::{create_prediction, get_completion, CompletionModel},
-        conversation::Conversation,
+        conversation::{Conversation, ConversationManager},
         message::{Message, Role},
     },
     components::{
-        conversation_manager::ConversationSelector, input::MessageInput,
+        conversation_selector::ConversationSelector, input::MessageInput,
         model_selector::ModelSelector, viewer::Viewer, Component,
     },
     config::Config,
@@ -41,6 +41,7 @@ pub struct App {
     pub last_tick_key_events: Vec<KeyEvent>,
     pub keymap: String,
     pub conversation: Conversation,
+    pub manager: ConversationManager,
 }
 
 impl App {
@@ -53,7 +54,8 @@ impl App {
         let config = Config::new()?;
         let mode = Mode::Input;
         let model_selector = ModelSelector::new();
-        let conversation_manager = ConversationSelector::default();
+        let conversation_selector = ConversationSelector::default();
+        let conversation_manager = ConversationManager::default();
         Ok(Self {
             tick_rate,
             frame_rate,
@@ -61,7 +63,7 @@ impl App {
                 Box::new(viewer),
                 Box::new(input),
                 Box::new(model_selector),
-                Box::new(conversation_manager),
+                Box::new(conversation_selector),
             ],
             should_quit: false,
             should_suspend: false,
@@ -71,6 +73,7 @@ impl App {
             last_tick_key_events: Vec::new(),
             keymap,
             conversation,
+            manager: conversation_manager,
         })
     }
 
@@ -340,7 +343,6 @@ impl App {
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
                     Action::NewConversation => self.new_conversation(),
-                    Action::LoadConversation(convo) => self.load_conversation(convo),
                     Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
@@ -371,7 +373,22 @@ impl App {
                         let _ = ctx.set().text(content);
                     }
                     Action::SaveConversation => {
-                        self.conversation.save();
+                        self.conversation.save().ok();
+                    }
+                    Action::SelectNextConversation => {
+                        self.manager.select_next_conversation();
+                    }
+                    Action::SelectPreviousConversation => {
+                        self.manager.select_prev_conversation();
+                    }
+                    Action::LoadSelectedConversation => {
+                        self.manager.activate_selected_conversation();
+                        if let Some(convo) = self.manager.load_selected_conversation().ok() {
+                            self.load_conversation(convo);
+                        }
+                    }
+                    Action::AddConversationToManager(convo) => {
+                        self.manager.add_conversation(convo);
                     }
                     Action::Resize(w, h) => {
                         // This isnt painting with the same render layout as below, so we should
@@ -395,6 +412,7 @@ impl App {
                     }
                     Action::Render => {
                         let conversation = &self.conversation;
+                        let manager = &self.manager;
                         tui.draw(|f| {
                             let rect = f.size();
 
@@ -426,7 +444,8 @@ impl App {
                                 selector_layout = Some(layout2[1]);
                             }
 
-                            let r = self.components[0].draw(f, viewer_layout, conversation);
+                            let r =
+                                self.components[0].draw(f, viewer_layout, conversation, manager);
                             if let Err(e) = r {
                                 let action_tx = action_tx.clone();
                                 tokio::spawn(async move {
@@ -437,7 +456,7 @@ impl App {
                                 });
                             }
 
-                            let r = self.components[1].draw(f, input_layout, conversation);
+                            let r = self.components[1].draw(f, input_layout, conversation, manager);
                             if let Err(e) = r {
                                 let action_tx = action_tx.clone();
                                 tokio::spawn(async move {
@@ -455,6 +474,7 @@ impl App {
                                             f,
                                             selector_layout,
                                             conversation,
+                                            manager,
                                         );
                                         if let Err(e) = r {
                                             let action_tx = action_tx.clone();
@@ -474,6 +494,7 @@ impl App {
                                             f,
                                             selector_layout,
                                             conversation,
+                                            manager,
                                         );
                                         if let Err(e) = r {
                                             let action_tx = action_tx.clone();

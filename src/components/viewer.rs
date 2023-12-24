@@ -38,7 +38,6 @@ enum ViewerState {
 pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    manager: ConversationManager,
     state: ViewerState,
     current_scroll: usize,
 }
@@ -51,11 +50,8 @@ impl Viewer {
             ViewerState::Unfocused
         };
 
-        let mut manager = ConversationManager::default();
-
         Self {
             state,
-            manager,
             ..Default::default()
         }
     }
@@ -74,12 +70,6 @@ impl Component for Viewer {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::SelectNextConversation => {
-                self.manager.select_next_conversation();
-            }
-            Action::SelectPreviousConversation => {
-                self.manager.select_prev_conversation();
-            }
             Action::SwitchMode(mode) => match mode {
                 Mode::Viewer => {
                     self.state = ViewerState::Focused;
@@ -117,7 +107,13 @@ impl Component for Viewer {
         Ok(None)
     }
 
-    fn draw(&mut self, f: &mut Frame<'_>, rect: Rect, conversation: &Conversation) -> Result<()> {
+    fn draw(
+        &mut self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        conversation: &Conversation,
+        manager: &ConversationManager,
+    ) -> Result<()> {
         let mut visible_lines = rect.height as usize;
         let selected_uuid = conversation.get_selected_uuid();
 
