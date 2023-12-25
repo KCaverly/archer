@@ -282,7 +282,7 @@ impl Component for Viewer {
 
                         for sub in subs {
                             if let Some(selected_uuid) = selected_uuid {
-                                if visible_lines <= 1 && id == &selected_uuid {
+                                if visible_lines <= 3 && id == &selected_uuid {
                                     message_lines.push(Line::from(vec![Span::styled(
                                         "...",
                                         Style::default().fg(Color::White),
