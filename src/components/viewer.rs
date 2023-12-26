@@ -87,6 +87,41 @@ impl Viewer {
                         ));
                     }
 
+                    if let Some(status) = message.status.clone() {
+                        match status {
+                            PredictionStatus::Starting => {
+                                spans.push(Span::styled(
+                                    " Starting...",
+                                    Style::default().fg(Color::LightBlue),
+                                ));
+                            }
+                            PredictionStatus::Processing => {
+                                spans.push(Span::styled(
+                                    " Processing...",
+                                    Style::default().fg(Color::LightGreen),
+                                ));
+                            }
+                            PredictionStatus::Succeeded => {
+                                spans.push(Span::styled(
+                                    " Succeeded.",
+                                    Style::default().fg(Color::LightGreen),
+                                ));
+                            }
+                            PredictionStatus::Canceled => {
+                                spans.push(Span::styled(
+                                    " Canceled.",
+                                    Style::default().fg(Color::LightRed),
+                                ));
+                            }
+                            PredictionStatus::Failed => {
+                                spans.push(Span::styled(
+                                    " Failed.",
+                                    Style::default().fg(Color::LightRed),
+                                ));
+                            }
+                        }
+                    };
+
                     lines.push(Line::from(spans));
                 }
             }
