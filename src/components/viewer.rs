@@ -59,7 +59,30 @@ impl Viewer {
         }
     }
 
-    pub fn get_visible_messages<'a>(&'a self, conversation: &'a Conversation) -> VisibleMessages {
+    pub fn get_lines_from_content<'a>(&self, content: &'a str, width: usize) -> Vec<Line<'a>> {
+        let visible_width = width.max(2) - 2;
+        let mut lines = Vec::new();
+        for line in content.lines() {
+            let words = WordSeparator::AsciiSpace
+                .find_words(line)
+                .collect::<Vec<_>>();
+            let subs = lines_to_strings(
+                wrap_optimal_fit(&words, &[visible_width as f64], &Penalties::new()).unwrap(),
+            );
+
+            for sub in subs {
+                lines.push(Line::styled(sub, Style::default().fg(Color::White)));
+            }
+        }
+
+        lines
+    }
+
+    pub fn get_visible_messages<'a>(
+        &'a self,
+        conversation: &'a Conversation,
+        width: usize,
+    ) -> VisibleMessages {
         let mut messages = Vec::new();
         for (_, message) in &conversation.messages {
             let mut lines = vec![];
@@ -126,11 +149,8 @@ impl Viewer {
                 }
             }
 
-            for line in message.content.split("\n") {
-                lines.push(Line::from(vec![Span::styled(
-                    line.clone(),
-                    Style::default().fg(Color::White),
-                )]));
+            for line in self.get_lines_from_content(&message.content, width) {
+                lines.push(line);
             }
 
             messages.push(VisibleMessage {
@@ -228,14 +248,21 @@ impl Component for Viewer {
         });
 
         let max_height = inner.height;
+        let message_width = 100;
 
         if self.visible_start == self.visible_end {
             self.visible_end = self.visible_start + inner.height as usize - 6;
         }
 
-        let messages = self.get_visible_messages(conversation);
+        let messages = self.get_visible_messages(conversation, message_width);
         let total_len = messages.total_len();
-        messages.render(f, inner, self.visible_start, self.visible_end);
+        messages.render(
+            f,
+            inner,
+            self.visible_start,
+            self.visible_end,
+            message_width as u16,
+        );
 
         self.visible_total = total_len + 5;
 
@@ -272,11 +299,17 @@ impl<'a> VisibleMessages<'a> {
         self.messages.iter().map(|x| x.lines.iter().len()).sum()
     }
 
-    fn render(&self, f: &mut Frame<'_>, rect: Rect, visible_start: usize, visible_end: usize) {
+    fn render(
+        &self,
+        f: &mut Frame<'_>,
+        rect: Rect,
+        visible_start: usize,
+        visible_end: usize,
+        width: u16,
+    ) {
         let mut y = rect.y;
 
         let mut i = 0;
-        let width = 100;
         for message in &self.messages {
             let mut message_lines = Vec::new();
             let mut first_in_message = false;
