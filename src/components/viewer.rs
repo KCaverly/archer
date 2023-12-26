@@ -39,7 +39,6 @@ pub struct Viewer {
     command_tx: Option<Sender<Action>>,
     config: Config,
     state: ViewerState,
-    current_scroll: usize,
     visible_start: usize,
     visible_end: usize,
     visible_total: usize,
@@ -301,8 +300,6 @@ enum RenderState {
 
 impl<'a> VisibleMessages<'a> {
     fn total_len(&self) -> usize {
-        // This isnt totally working
-        // As we add new messages, this gets unnaturally high
         self.messages
             .iter()
             .map(|x| x.lines.iter().len() + 2)
@@ -330,22 +327,20 @@ impl<'a> VisibleMessages<'a> {
                 if idx == 0 {
                     if i >= visible_start && i <= visible_end {
                         top_border = true;
-                        i += 1;
                     }
+                    i += 1;
                 }
 
                 if i >= visible_start && i <= visible_end {
-                    message_lines.push(Line::from(format!(
-                        "Message {idx}: Line {i} - Start ({visible_start}) / End ({visible_end}) - Height ({})", rect.height
-                    )));
+                    message_lines.push(line.clone());
                 }
                 i += 1;
 
                 if idx == message.lines.iter().len() - 1 {
                     if i >= visible_start && i <= visible_end {
                         bottom_border = true;
-                        i += 1;
                     }
+                    i += 1;
                 }
             }
 
