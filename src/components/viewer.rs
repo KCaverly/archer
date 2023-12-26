@@ -42,6 +42,9 @@ pub struct Viewer {
     visible_start: usize,
     visible_end: usize,
     visible_total: usize,
+    sticky_scroll: bool,
+    visible_height: usize,
+    scrollable: bool,
 }
 
 impl Viewer {
@@ -144,8 +147,17 @@ impl Viewer {
         lines
     }
 
+    pub fn get_visible_ranges(&mut self) -> (usize, usize) {
+        if self.sticky_scroll {
+            self.visible_end = self.visible_total;
+            self.visible_start = self.visible_end.max(self.visible_height) - self.visible_height;
+        }
+
+        (self.visible_start, self.visible_end)
+    }
+
     pub fn get_visible_messages<'a>(
-        &'a self,
+        &'a mut self,
         conversation: &'a Conversation,
         width: usize,
     ) -> VisibleMessages {
@@ -160,9 +172,18 @@ impl Viewer {
             });
         }
 
-        VisibleMessages {
+        let messages = VisibleMessages {
             messages: messages.clone(),
+        };
+
+        self.visible_total = messages.total_len().max(1) - 1;
+        if self.visible_total > self.visible_height {
+            self.scrollable = true;
+        } else {
+            self.scrollable = false;
         }
+
+        messages
     }
 }
 
@@ -212,16 +233,28 @@ impl Component for Viewer {
                 }
             },
             Action::ScrollUp => {
-                if self.visible_start > 0 {
-                    self.visible_start -= 1;
-                    self.visible_end -= 1;
+                if self.scrollable {
+                    if self.visible_end > self.visible_height {
+                        self.visible_start = self.visible_start.max(1) - 1;
+                        self.visible_end = self.visible_end.max(1) - 1;
+                    }
                 }
+
+                self.sticky_scroll = false;
             }
             Action::ScrollDown => {
-                if self.visible_end < self.visible_total {
-                    self.visible_end += 1;
-                    self.visible_start += 1;
+                if self.scrollable {
+                    if self.visible_end < self.visible_total {
+                        self.visible_end += 1;
+                        self.visible_start += 1;
+                    }
                 }
+                self.sticky_scroll = false;
+            }
+            Action::ReceiveMessage(..)
+            | Action::StreamMessage(..)
+            | Action::LoadSelectedConversation => {
+                self.sticky_scroll = true;
             }
             _ => {}
         }
@@ -248,34 +281,24 @@ impl Component for Viewer {
             horizontal: 1,
         });
 
-        let max_height = inner.height;
+        self.visible_height = (inner.height - 1) as usize;
         let message_width = 100;
 
-        if self.visible_start == self.visible_end {
-            // I am removing one here, to accomodate for the margin on the bottom
-            self.visible_end = self.visible_start + inner.height as usize - 1;
-        }
+        let (visible_start, visible_end) = self.get_visible_ranges();
 
         let messages = self.get_visible_messages(conversation, message_width);
         let total_len = messages.total_len();
-        messages.render(
-            f,
-            inner,
-            self.visible_start,
-            self.visible_end,
-            message_width as u16,
-        );
+        messages.render(f, inner, visible_start, visible_end, message_width as u16);
 
-        // Remove one here to remove blank space at bottom
-        self.visible_total = total_len.max(1) - 1;
-
-        let scrollbar = Scrollbar::default()
-            .orientation(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓"));
-        let mut scrollbar_state =
-            ScrollbarState::new(self.visible_total).position(self.visible_end);
-        f.render_stateful_widget(scrollbar, inner, &mut scrollbar_state);
+        if self.scrollable {
+            let scrollbar = Scrollbar::default()
+                .orientation(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"));
+            let mut scrollbar_state =
+                ScrollbarState::new(self.visible_total).position(self.visible_end);
+            f.render_stateful_widget(scrollbar, inner, &mut scrollbar_state);
+        }
         Ok(())
     }
 }
