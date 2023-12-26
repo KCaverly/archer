@@ -59,9 +59,72 @@ impl Viewer {
         }
     }
 
+    pub fn get_title_line<'a>(&self, message: &Message, width: usize) -> Line<'a> {
+        let mut title_spans = Vec::new();
+        match message.role {
+            Role::System => title_spans.push((
+                " System".to_string(),
+                Style::default().fg(SYSTEM_COLOR).bold(),
+            )),
+            Role::User => {
+                title_spans.push((" User".to_string(), Style::default().fg(USER_COLOR).bold()))
+            }
+            Role::Assistant => {
+                title_spans.push((
+                    " Assistant".to_string(),
+                    Style::default().fg(ASSISTANT_COLOR).bold(),
+                ));
+
+                if let Some(model) = &message.model {
+                    let (owner, model_name) = model.get_model_details();
+                    title_spans.push((
+                        format!(": ({owner}/{model_name})"),
+                        Style::default().fg(ASSISTANT_COLOR),
+                    ));
+                }
+
+                if let Some(status) = message.status.clone() {
+                    let (status_str, color) = match status {
+                        PredictionStatus::Starting => (" Starting...", Color::LightBlue),
+                        PredictionStatus::Processing => (" Processing...", Color::LightGreen),
+                        PredictionStatus::Succeeded => (" Succeeded", Color::LightGreen),
+                        PredictionStatus::Failed => (" Failed", Color::LightRed),
+                        PredictionStatus::Canceled => (" Canceled", Color::LightRed),
+                    };
+
+                    let total_span_chars: usize = title_spans
+                        .iter()
+                        .map(|(span, _)| span.len())
+                        .sum::<usize>()
+                        + status_str.len()
+                        + 3;
+
+                    let pad_chars = width.max(total_span_chars) - total_span_chars;
+                    let mut pad = String::new();
+                    for _ in 0..pad_chars {
+                        pad.push(' ');
+                    }
+
+                    title_spans.push((pad, Style::default()));
+                    title_spans.push((status_str.to_string(), Style::default().fg(color)));
+                }
+            }
+        }
+
+        Line::from(
+            title_spans
+                .into_iter()
+                .map(|(span, style)| Span::styled(span, style))
+                .collect::<Vec<Span>>(),
+        )
+    }
+
     pub fn get_lines_from_content<'a>(&self, content: &'a str, width: usize) -> Vec<Line<'a>> {
-        let visible_width = width.max(2) - 2;
-        let mut lines = Vec::new();
+        let visible_width = width.max(2) - 4;
+        let mut lines = vec![Line::styled("", Style::default())];
+
+        let content = content.trim_matches('\n');
+
         for line in content.lines() {
             let words = WordSeparator::AsciiSpace
                 .find_words(line)
@@ -70,7 +133,11 @@ impl Viewer {
                 wrap_optimal_fit(&words, &[visible_width as f64], &Penalties::new()).unwrap(),
             );
 
-            for sub in subs {
+            for mut sub in subs {
+                if !sub.starts_with(' ') {
+                    sub = format!(" {sub}");
+                }
+
                 lines.push(Line::styled(sub, Style::default().fg(Color::White)));
             }
         }
@@ -85,73 +152,8 @@ impl Viewer {
     ) -> VisibleMessages {
         let mut messages = Vec::new();
         for (_, message) in &conversation.messages {
-            let mut lines = vec![];
-            match message.role {
-                Role::System => lines.push(Line::from(vec![Span::styled(
-                    "System",
-                    Style::default().fg(SYSTEM_COLOR).bold(),
-                )])),
-                Role::User => lines.push(Line::from(vec![Span::styled(
-                    "User",
-                    Style::default().fg(USER_COLOR).bold(),
-                )])),
-                Role::Assistant => {
-                    let mut spans = Vec::new();
-                    spans.push(Span::styled(
-                        "Assistant",
-                        Style::default().fg(ASSISTANT_COLOR).bold(),
-                    ));
-
-                    if let Some(model) = &message.model {
-                        let (owner, model_name) = model.get_model_details();
-                        spans.push(Span::styled(
-                            format!(": ({owner}/{model_name})"),
-                            Style::default().fg(ASSISTANT_COLOR),
-                        ));
-                    }
-
-                    if let Some(status) = message.status.clone() {
-                        match status {
-                            PredictionStatus::Starting => {
-                                spans.push(Span::styled(
-                                    " Starting...",
-                                    Style::default().fg(Color::LightBlue),
-                                ));
-                            }
-                            PredictionStatus::Processing => {
-                                spans.push(Span::styled(
-                                    " Processing...",
-                                    Style::default().fg(Color::LightGreen),
-                                ));
-                            }
-                            PredictionStatus::Succeeded => {
-                                spans.push(Span::styled(
-                                    " Succeeded.",
-                                    Style::default().fg(Color::LightGreen),
-                                ));
-                            }
-                            PredictionStatus::Canceled => {
-                                spans.push(Span::styled(
-                                    " Canceled.",
-                                    Style::default().fg(Color::LightRed),
-                                ));
-                            }
-                            PredictionStatus::Failed => {
-                                spans.push(Span::styled(
-                                    " Failed.",
-                                    Style::default().fg(Color::LightRed),
-                                ));
-                            }
-                        }
-                    };
-
-                    lines.push(Line::from(spans));
-                }
-            }
-
-            for line in self.get_lines_from_content(&message.content, width) {
-                lines.push(line);
-            }
+            let mut lines = vec![self.get_title_line(&message, width)];
+            lines.extend(self.get_lines_from_content(&message.content, width));
 
             messages.push(VisibleMessage {
                 lines,
@@ -251,7 +253,8 @@ impl Component for Viewer {
         let message_width = 100;
 
         if self.visible_start == self.visible_end {
-            self.visible_end = self.visible_start + inner.height as usize - 6;
+            // I am removing one here, to accomodate for the margin on the bottom
+            self.visible_end = self.visible_start + inner.height as usize - 1;
         }
 
         let messages = self.get_visible_messages(conversation, message_width);
@@ -264,7 +267,8 @@ impl Component for Viewer {
             message_width as u16,
         );
 
-        self.visible_total = total_len + 5;
+        // Remove one here to remove blank space at bottom
+        self.visible_total = total_len.max(1) - 1;
 
         let scrollbar = Scrollbar::default()
             .orientation(ScrollbarOrientation::VerticalRight)
@@ -289,14 +293,20 @@ pub struct VisibleMessages<'a> {
 }
 
 enum RenderState {
-    Preceeding,
     Full,
-    Trailing,
+    TruncatedTop,
+    TruncatedBottom,
+    TruncatedTopAndBottom,
 }
 
 impl<'a> VisibleMessages<'a> {
     fn total_len(&self) -> usize {
-        self.messages.iter().map(|x| x.lines.iter().len()).sum()
+        // This isnt totally working
+        // As we add new messages, this gets unnaturally high
+        self.messages
+            .iter()
+            .map(|x| x.lines.iter().len() + 2)
+            .sum::<usize>()
     }
 
     fn render(
@@ -312,58 +322,70 @@ impl<'a> VisibleMessages<'a> {
         let mut i = 0;
         for message in &self.messages {
             let mut message_lines = Vec::new();
-            let mut first_in_message = false;
+
+            let mut top_border = false;
+            let mut bottom_border = false;
+
             for (idx, line) in message.lines.iter().enumerate() {
-                if i >= visible_start && i <= visible_end {
-                    if idx == 0 {
-                        first_in_message = true;
+                if idx == 0 {
+                    if i >= visible_start && i <= visible_end {
+                        top_border = true;
+                        i += 1;
                     }
-                    message_lines.push(line.clone());
+                }
+
+                if i >= visible_start && i <= visible_end {
+                    message_lines.push(Line::from(format!(
+                        "Message {idx}: Line {i} - Start ({visible_start}) / End ({visible_end}) - Height ({})", rect.height
+                    )));
                 }
                 i += 1;
+
+                if idx == message.lines.iter().len() - 1 {
+                    if i >= visible_start && i <= visible_end {
+                        bottom_border = true;
+                        i += 1;
+                    }
+                }
             }
 
-            let state = if message_lines.len() == message.lines.iter().len() {
-                RenderState::Full
-            } else if first_in_message {
-                RenderState::Trailing
-            } else {
-                RenderState::Preceeding
+            let (borders, border_height) = {
+                if top_border && bottom_border {
+                    (
+                        Borders::TOP | Borders::BOTTOM | Borders::LEFT | Borders::RIGHT,
+                        2,
+                    )
+                } else if top_border {
+                    (Borders::TOP | Borders::LEFT | Borders::RIGHT, 1)
+                } else if bottom_border {
+                    (Borders::BOTTOM | Borders::LEFT | Borders::RIGHT, 1)
+                } else {
+                    (Borders::LEFT | Borders::RIGHT, 0)
+                }
             };
 
             let message_len = message_lines.iter().len();
-            if message_len > 0 {
-                let block = match state {
-                    RenderState::Full => Block::default()
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Rounded),
-                    RenderState::Preceeding => Block::default()
-                        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
-                        .border_type(BorderType::Rounded),
-                    RenderState::Trailing => Block::default()
-                        .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
-                        .border_type(BorderType::Rounded),
-                };
+            let block = Block::default()
+                .borders(borders)
+                .border_type(BorderType::Rounded);
+            let paragraph = Paragraph::new(Text::from(message_lines)).block(block);
 
-                let paragraph = Paragraph::new(Text::from(message_lines)).block(block);
+            let height = (message_len + border_height) as u16;
+            let x = match message.role {
+                Role::Assistant => rect.width - width,
+                _ => rect.x,
+            };
 
-                let height = (message_len + 2) as u16;
-                let x = match message.role {
-                    Role::Assistant => rect.width - width,
-                    _ => rect.x,
-                };
+            let message_rect = Rect {
+                x,
+                y,
+                width,
+                height,
+            };
 
-                let message_rect = Rect {
-                    x,
-                    y,
-                    width,
-                    height,
-                };
+            y += height;
 
-                y += height;
-
-                f.render_widget(paragraph, message_rect);
-            }
+            f.render_widget(paragraph, message_rect);
         }
     }
 }
