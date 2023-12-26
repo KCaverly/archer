@@ -47,6 +47,8 @@ pub enum Action {
     SaveConversation,
     SetTitle(String),
     UpdateTitle(String),
+    ScrollUp,
+    ScrollDown,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -87,6 +89,8 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectNextConversation" => Ok(Action::SelectNextConversation),
                     "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),
                     "NewConversation" => Ok(Action::NewConversation),
+                    "ScrollUp" => Ok(Action::ScrollUp),
+                    "ScrollDown" => Ok(Action::ScrollDown),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {

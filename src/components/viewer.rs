@@ -1,7 +1,7 @@
 use futures::StreamExt;
 use ratatui::widgets::block::Title;
 use std::str::from_utf8;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{fmt, fs};
 use textwrap::core::Word;
 use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
@@ -40,6 +40,9 @@ pub struct Viewer {
     config: Config,
     state: ViewerState,
     current_scroll: usize,
+    visible_start: usize,
+    visible_end: usize,
+    visible_total: usize,
 }
 
 impl Viewer {
@@ -53,6 +56,56 @@ impl Viewer {
         Self {
             state,
             ..Default::default()
+        }
+    }
+
+    pub fn get_visible_messages<'a>(&'a self, conversation: &'a Conversation) -> VisibleMessages {
+        let mut messages = Vec::new();
+        for (_, message) in &conversation.messages {
+            let mut lines = vec![];
+            match message.role {
+                Role::System => lines.push(Line::from(vec![Span::styled(
+                    "System",
+                    Style::default().fg(SYSTEM_COLOR).bold(),
+                )])),
+                Role::User => lines.push(Line::from(vec![Span::styled(
+                    "User",
+                    Style::default().fg(USER_COLOR).bold(),
+                )])),
+                Role::Assistant => {
+                    let mut spans = Vec::new();
+                    spans.push(Span::styled(
+                        "Assistant",
+                        Style::default().fg(ASSISTANT_COLOR).bold(),
+                    ));
+
+                    if let Some(model) = &message.model {
+                        let (owner, model_name) = model.get_model_details();
+                        spans.push(Span::styled(
+                            format!(": ({owner}/{model_name})"),
+                            Style::default().fg(ASSISTANT_COLOR),
+                        ));
+                    }
+
+                    lines.push(Line::from(spans));
+                }
+            }
+
+            for line in message.content.split("\n") {
+                lines.push(Line::from(vec![Span::styled(
+                    line.clone(),
+                    Style::default().fg(Color::White),
+                )]));
+            }
+
+            messages.push(VisibleMessage {
+                lines,
+                role: message.role.clone(),
+            });
+        }
+
+        VisibleMessages {
+            messages: messages.clone(),
         }
     }
 }
@@ -102,6 +155,18 @@ impl Component for Viewer {
                     self.state = ViewerState::Maximized;
                 }
             },
+            Action::ScrollUp => {
+                if self.visible_start > 0 {
+                    self.visible_start -= 1;
+                    self.visible_end -= 1;
+                }
+            }
+            Action::ScrollDown => {
+                if self.visible_end < self.visible_total {
+                    self.visible_end += 1;
+                    self.visible_start += 1;
+                }
+            }
             _ => {}
         }
         Ok(None)
@@ -114,272 +179,127 @@ impl Component for Viewer {
         conversation: &Conversation,
         manager: &ConversationManager,
     ) -> Result<()> {
-        let mut visible_lines = rect.height as usize;
-        let selected_uuid = conversation.get_selected_uuid();
+        let block = Block::default()
+            .title("Viewer")
+            .title_alignment(Alignment::Left)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Thick)
+            .style(Style::default().fg(FOCUSED_COLOR).bg(Color::Black));
+        f.render_widget(block.clone(), rect);
 
-        match self.state {
-            ViewerState::Maximized => {
-                if let Some(message) = conversation.get_selected_message().ok() {
-                    let mut message_lines = Vec::new();
+        let inner = rect.inner(&Margin {
+            vertical: 1,
+            horizontal: 1,
+        });
 
-                    match message.role {
-                        Role::System => message_lines.push(Line::from(vec![Span::styled(
-                            "System",
-                            Style::default().fg(SYSTEM_COLOR).bold(),
-                        )])),
-                        Role::User => message_lines.push(Line::from(vec![Span::styled(
-                            "User",
-                            Style::default().fg(USER_COLOR).bold(),
-                        )])),
-                        Role::Assistant => {
-                            let mut spans = Vec::new();
-                            spans.push(Span::styled(
-                                "Assistant",
-                                Style::default().fg(ASSISTANT_COLOR).bold(),
-                            ));
+        let max_height = inner.height;
 
-                            if let Some(model) = &message.model {
-                                let (owner, model_name) = model.get_model_details();
-                                spans.push(Span::styled(
-                                    format!(": ({owner}/{model_name})"),
-                                    Style::default().fg(ASSISTANT_COLOR),
-                                ));
-                            }
-
-                            if let Some(status) = message.status {
-                                let (status_str, color) = match status {
-                                    PredictionStatus::Starting => ("Starting...", Color::Blue),
-                                    PredictionStatus::Processing => {
-                                        ("Processing...", Color::LightGreen)
-                                    }
-                                    PredictionStatus::Canceled => ("Canceled.", Color::Gray),
-                                    PredictionStatus::Succeeded => {
-                                        ("Succeeded.", Color::LightGreen)
-                                    }
-                                    PredictionStatus::Failed => ("Failed.", Color::Red),
-                                };
-                                spans.push(Span::styled(
-                                    " - ",
-                                    Style::default().fg(ASSISTANT_COLOR),
-                                ));
-                                spans.push(Span::styled(status_str, Style::default().fg(color)));
-                            }
-                            message_lines.push(Line::from(spans));
-                        }
-                    }
-
-                    for line in message.content.split("\n") {
-                        message_lines.push(Line::from(vec![Span::styled(
-                            line,
-                            Style::default().fg(Color::White),
-                        )]));
-                    }
-
-                    let line_count = message_lines.len();
-                    let text = Text::from(message_lines);
-
-                    let vertical_scroll = 0;
-                    let scrollbar = Scrollbar::default()
-                        .orientation(ScrollbarOrientation::VerticalRight)
-                        .begin_symbol(Some("↑"))
-                        .end_symbol(Some("↓"));
-                    let mut scrollbar_state =
-                        ScrollbarState::new(line_count).position(vertical_scroll);
-
-                    let paragraph = Paragraph::new(text)
-                        .block(
-                            Block::default()
-                                .title(
-                                    Title::from(format!(" Focused Message "))
-                                        .alignment(Alignment::Left),
-                                )
-                                .borders(Borders::ALL)
-                                .border_type(BorderType::Thick)
-                                .style(Style::default().fg(ACTIVE_COLOR).bg(Color::Black)),
-                        )
-                        .alignment(Alignment::Left)
-                        .wrap(Wrap { trim: true })
-                        .scroll((vertical_scroll as u16, 0));
-                    f.render_widget(paragraph, rect);
-                    f.render_stateful_widget(
-                        scrollbar,
-                        rect.inner(&Margin {
-                            vertical: 1,
-                            horizontal: 0,
-                        }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
-                        &mut scrollbar_state,
-                    );
-                }
-            }
-            _ => {
-                // Render Messages
-                let mut message_items = Vec::new();
-                let mut line_count: usize = 0;
-                for (id, message) in &conversation.messages {
-                    let mut message_lines = Vec::new();
-
-                    match message.role {
-                        Role::System => message_lines.push(Line::from(vec![Span::styled(
-                            "System",
-                            Style::default().fg(SYSTEM_COLOR).bold(),
-                        )])),
-                        Role::User => message_lines.push(Line::from(vec![Span::styled(
-                            "User",
-                            Style::default().fg(USER_COLOR).bold(),
-                        )])),
-                        Role::Assistant => {
-                            let mut spans = Vec::new();
-                            spans.push(Span::styled(
-                                "Assistant",
-                                Style::default().fg(ASSISTANT_COLOR).bold(),
-                            ));
-
-                            if let Some(model) = &message.model {
-                                let (owner, model_name) = model.get_model_details();
-                                spans.push(Span::styled(
-                                    format!(": ({owner}/{model_name})"),
-                                    Style::default().fg(ASSISTANT_COLOR),
-                                ));
-                            }
-
-                            if let Some(status) = message.status.clone() {
-                                let (status_str, color) = match status {
-                                    PredictionStatus::Starting => ("Starting...", Color::Blue),
-                                    PredictionStatus::Processing => {
-                                        ("Processing...", Color::LightGreen)
-                                    }
-                                    PredictionStatus::Canceled => ("Canceled.", Color::Gray),
-                                    PredictionStatus::Succeeded => {
-                                        ("Succeeded.", Color::LightGreen)
-                                    }
-                                    PredictionStatus::Failed => ("Failed.", Color::Red),
-                                };
-                                spans.push(Span::styled(
-                                    " - ",
-                                    Style::default().fg(ASSISTANT_COLOR),
-                                ));
-                                spans.push(Span::styled(status_str, Style::default().fg(color)));
-                            }
-
-                            message_lines.push(Line::from(spans));
-                        }
-                    }
-
-                    visible_lines = if visible_lines >= message_lines.len() {
-                        visible_lines - message_lines.len()
-                    } else {
-                        visible_lines
-                    };
-
-                    'outer: for line in message.content.split("\n") {
-                        let words = WordSeparator::AsciiSpace
-                            .find_words(line)
-                            .collect::<Vec<_>>();
-                        let subs = lines_to_strings(
-                            wrap_optimal_fit(&words, &[rect.width as f64 - 2.0], &Penalties::new())
-                                .unwrap(),
-                        );
-
-                        for sub in subs {
-                            if let Some(selected_uuid) = selected_uuid {
-                                if visible_lines <= 3 && id == &selected_uuid {
-                                    message_lines.push(Line::from(vec![Span::styled(
-                                        "...",
-                                        Style::default().fg(Color::White),
-                                    )]));
-                                    break 'outer;
-                                }
-                            }
-
-                            message_lines.push(Line::from(vec![Span::styled(
-                                sub,
-                                Style::default().fg(Color::White),
-                            )]));
-
-                            if let Some(selected_uuid) = selected_uuid {
-                                if visible_lines > 0 && id == &selected_uuid {
-                                    visible_lines -= 1;
-                                }
-                            }
-                        }
-                    }
-
-                    let mut break_line = String::new();
-                    for _ in 0..(rect.width - 2) {
-                        break_line.push('-');
-                    }
-                    message_lines
-                        .push(Line::from(vec![Span::styled(break_line, Style::default())]));
-
-                    if let Some(selected_uuid) = selected_uuid {
-                        if id == &selected_uuid {
-                            self.current_scroll = line_count;
-                        }
-                    }
-
-                    line_count = message_lines.len();
-
-                    // Add seperator to the bottom of the message
-                    message_items.push(ListItem::new(Text::from(message_lines)));
-                }
-
-                let list = List::new(message_items.clone()).block(
-                    Block::default()
-                        .title(Title::from(" Conversation ").alignment(Alignment::Left))
-                        .borders(Borders::ALL)
-                        .border_type(BorderType::Thick)
-                        .style(Style::default().fg(match self.state {
-                            ViewerState::Active | ViewerState::Maximized => ACTIVE_COLOR,
-                            ViewerState::Unfocused => UNFOCUSED_COLOR,
-                            ViewerState::Focused => FOCUSED_COLOR,
-                        }))
-                        .bg(Color::Black),
-                );
-
-                let list = match self.state {
-                    ViewerState::Active => list
-                        .highlight_style(
-                            Style::default()
-                                .add_modifier(Modifier::ITALIC)
-                                .fg(Color::LightYellow),
-                        )
-                        .highlight_symbol(""),
-                    _ => list,
-                };
-
-                let mut list_state =
-                    ListState::default().with_selected(conversation.selected_message);
-
-                let (mut message_count, selected_message) = conversation.get_position();
-                message_count = if message_count > 0 {
-                    message_count - 1
-                } else {
-                    0
-                };
-
-                let scrollbar = Scrollbar::default()
-                    .orientation(ScrollbarOrientation::VerticalRight)
-                    .begin_symbol(Some("↑"))
-                    .end_symbol(Some("↓"));
-                let mut scrollbar_state = ScrollbarState::new(message_count * rect.height as usize)
-                    .position(selected_message * rect.height as usize);
-
-                f.render_stateful_widget(list, rect, &mut list_state);
-                f.render_stateful_widget(
-                    scrollbar,
-                    rect.inner(&Margin {
-                        vertical: 1,
-                        horizontal: 0,
-                    }), // using a inner vertical margin of 1 unit makes the scrollbar inside the block
-                    &mut scrollbar_state,
-                );
-            }
+        if self.visible_start == self.visible_end {
+            self.visible_end = self.visible_start + inner.height as usize - 6;
         }
 
+        let messages = self.get_visible_messages(conversation);
+        let total_len = messages.total_len();
+        messages.render(f, inner, self.visible_start, self.visible_end);
+
+        self.visible_total = total_len + 5;
+
+        let scrollbar = Scrollbar::default()
+            .orientation(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"));
+        let mut scrollbar_state =
+            ScrollbarState::new(self.visible_total).position(self.visible_end);
+        f.render_stateful_widget(scrollbar, inner, &mut scrollbar_state);
         Ok(())
     }
 }
-//
+
+#[derive(Clone)]
+struct VisibleMessage<'a> {
+    lines: Vec<Line<'a>>,
+    role: Role,
+}
+
+#[derive(Clone)]
+pub struct VisibleMessages<'a> {
+    messages: Vec<VisibleMessage<'a>>,
+}
+
+enum RenderState {
+    Preceeding,
+    Full,
+    Trailing,
+}
+
+impl<'a> VisibleMessages<'a> {
+    fn total_len(&self) -> usize {
+        self.messages.iter().map(|x| x.lines.iter().len()).sum()
+    }
+
+    fn render(&self, f: &mut Frame<'_>, rect: Rect, visible_start: usize, visible_end: usize) {
+        let mut y = rect.y;
+
+        let mut i = 0;
+        let width = 100;
+        for message in &self.messages {
+            let mut message_lines = Vec::new();
+            let mut first_in_message = false;
+            for (idx, line) in message.lines.iter().enumerate() {
+                if i >= visible_start && i <= visible_end {
+                    if idx == 0 {
+                        first_in_message = true;
+                    }
+                    message_lines.push(line.clone());
+                }
+                i += 1;
+            }
+
+            let state = if message_lines.len() == message.lines.iter().len() {
+                RenderState::Full
+            } else if first_in_message {
+                RenderState::Trailing
+            } else {
+                RenderState::Preceeding
+            };
+
+            let message_len = message_lines.iter().len();
+            if message_len > 0 {
+                let block = match state {
+                    RenderState::Full => Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded),
+                    RenderState::Preceeding => Block::default()
+                        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+                        .border_type(BorderType::Rounded),
+                    RenderState::Trailing => Block::default()
+                        .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+                        .border_type(BorderType::Rounded),
+                };
+
+                let paragraph = Paragraph::new(Text::from(message_lines)).block(block);
+
+                let height = (message_len + 2) as u16;
+                let x = match message.role {
+                    Role::Assistant => rect.width - width,
+                    _ => rect.x,
+                };
+
+                let message_rect = Rect {
+                    x,
+                    y,
+                    width,
+                    height,
+                };
+
+                y += height;
+
+                f.render_widget(paragraph, message_rect);
+            }
+        }
+    }
+}
+
 // Helper to convert wrapped lines to a Vec<String>.
 fn lines_to_strings(lines: Vec<&[Word<'_>]>) -> Vec<String> {
     lines

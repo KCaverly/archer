@@ -48,7 +48,8 @@
         "<Ctrl-z>": "Suspend", // Suspend the application
         
         // Action Keybindings
-        "<k>": "SwitchMode(Viewer)",
+        "<j>": "ScrollDown",
+        "<k>": "ScrollUp",
         "<i>": "SwitchMode(ActiveInput)",
         "<m>": "SwitchMode(ModelSelector)",
         "<c>": "SwitchMode(ConversationManager)",
