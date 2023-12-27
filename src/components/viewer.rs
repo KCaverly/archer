@@ -163,7 +163,8 @@ impl Viewer {
         let mut messages = Vec::new();
         for (id, message) in &conversation.messages {
             let mut lines = vec![self.get_title_line(&message, width)];
-            lines.extend(self.get_lines_from_content(&message.content, width));
+            let content = message.content.trim();
+            lines.extend(self.get_lines_from_content(content, width));
 
             messages.push(VisibleMessage {
                 lines,
