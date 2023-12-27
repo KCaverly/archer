@@ -49,7 +49,7 @@ impl App {
         let conversation = Conversation::new();
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
-        let viewer = Viewer::new(false);
+        let viewer = Viewer::new();
         let input = MessageInput::new(true, keymap.clone());
         let config = Config::new()?;
         let mode = Mode::Input;
@@ -79,16 +79,14 @@ impl App {
 
     pub fn set_keymap(&mut self) {
         self.keymap = match self.mode {
-            Mode::Input => " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ",
-            Mode::Viewer => " i: insert; j: focus input; m: change model; c: change convo; q; quit; ",
+            Mode::Input => " i: insert; v: focus viewer; j: scroll down; k: scroll up; m: change model; c: change convo; q: quit; ",
             Mode::ActiveInput => " enter: send message; esc: exit input mode; ",
             Mode::ActiveViewer => {
-                " j: select next; k: select prev; c: copy; f: maximize; esc: exit scroll mode; "
+                " j: select next; k: select prev; c: copy; esc: exit scroll mode; "
             }
             Mode::ModelSelector => {
                 " j: select next; k: select prev; enter: select model; m: close; "
             }
-            Mode::MessageViewer => " j: scroll down; k: scroll up; esc: see all messages; ",
             Mode::ConversationManager => {
                 " j: select next; k: select prev; n: new convo; enter: load convo; esc: close panel; "
             }
@@ -381,8 +379,6 @@ User: {}
                     Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
-                    Action::FocusConversation => self.conversation.focus(),
-                    Action::UnfocusConversation => self.conversation.unfocus(),
                     Action::SelectNextMessage => self.conversation.select_next_message(),
                     Action::SelectPreviousMessage => self.conversation.select_prev_message(),
                     Action::SetTitle(title) => {

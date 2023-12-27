@@ -41,12 +41,12 @@ pub enum Action {
     SelectNextConversation,
     LoadSelectedConversation,
     AddConversationToManager(Conversation),
-    FocusConversation,
-    UnfocusConversation,
     NewConversation,
     SaveConversation,
     SetTitle(String),
     UpdateTitle(String),
+    ScrollUp,
+    ScrollDown,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -87,15 +87,15 @@ impl<'de> Deserialize<'de> for Action {
                     "SelectNextConversation" => Ok(Action::SelectNextConversation),
                     "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),
                     "NewConversation" => Ok(Action::NewConversation),
+                    "ScrollUp" => Ok(Action::ScrollUp),
+                    "ScrollDown" => Ok(Action::ScrollDown),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {
                             "Input" => Ok(Action::SwitchMode(Mode::Input)),
                             "ActiveInput" => Ok(Action::SwitchMode(Mode::ActiveInput)),
-                            "Viewer" => Ok(Action::SwitchMode(Mode::Viewer)),
                             "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
                             "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
-                            "MessageViewer" => Ok(Action::SwitchMode(Mode::MessageViewer)),
                             "ConversationManager" => {
                                 Ok(Action::SwitchMode(Mode::ConversationManager))
                             }

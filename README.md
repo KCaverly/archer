@@ -28,8 +28,13 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 - [x] Concurrent requests
 - [x] Status updating
 - [x] Better error handling
-- [x] All message scrolling
-- [ ] Focused message scrolling
+- [ ] Bubble chat messages
+  - [x] Add status to assistant tags
+  - [x] Manage for text wrapping
+  - [ ] Left align status
+  - [ ] Trim empty whitespace from beginning and end of content
+  - [ ] Update keymap hints
+  - [ ] Add select message functionality
 
 #### Quality of Life
 - [ ] Dynamic layouts for smaller screens
@@ -42,6 +47,7 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 - [x] Saving/Loading conversations
 - [x] Convo titles
 - [ ] Logging panel
+- [ ] Deleting conversations
 
 #### Release
 - [ ] Work out proper versioning

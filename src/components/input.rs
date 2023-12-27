@@ -116,11 +116,7 @@ impl Component for MessageInput<'static> {
                 self.keymap = keymap;
             }
             Action::SwitchMode(mode) => match mode {
-                Mode::Viewer
-                | Mode::ActiveViewer
-                | Mode::ModelSelector
-                | Mode::MessageViewer
-                | Mode::ConversationManager => {
+                Mode::ActiveViewer | Mode::ModelSelector | Mode::ConversationManager => {
                     self.state = InputState::Unfocused;
                 }
                 Mode::Input => {
