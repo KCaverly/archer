@@ -10,6 +10,7 @@ use indexmap::IndexMap;
 use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 use replicate_rs::predictions::PredictionStatus;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
@@ -29,11 +30,19 @@ use crate::{
     tui::{self, Frame, Tui},
 };
 
+#[derive(PartialEq, Eq, Ord, PartialOrd, Hash)]
+pub enum AppPanel {
+    Input,
+    Viewer,
+    ModelSelector,
+    ConversationManager,
+}
+
 pub struct App {
     pub config: Config,
     pub tick_rate: f64,
     pub frame_rate: f64,
-    pub components: Vec<Box<dyn Component>>,
+    pub components: HashMap<AppPanel, Box<dyn Component>>,
     pub should_quit: bool,
     pub should_suspend: bool,
     pub mode: Mode,
@@ -49,22 +58,26 @@ impl App {
         let conversation = Conversation::new();
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
-        let viewer = Viewer::new();
-        let input = MessageInput::new(true, keymap.clone());
+
+        let mut components = HashMap::<AppPanel, Box<dyn Component>>::new();
+        components.insert(AppPanel::Viewer, Box::new(Viewer::new()));
+        components.insert(
+            AppPanel::Input,
+            Box::new(MessageInput::new(true, keymap.clone())),
+        );
+        components.insert(AppPanel::ModelSelector, Box::new(ModelSelector::new()));
+        components.insert(
+            AppPanel::ConversationManager,
+            Box::new(ConversationSelector::default()),
+        );
         let config = Config::new()?;
         let mode = Mode::Input;
-        let model_selector = ModelSelector::new();
-        let conversation_selector = ConversationSelector::default();
         let conversation_manager = ConversationManager::default();
+
         Ok(Self {
             tick_rate,
             frame_rate,
-            components: vec![
-                Box::new(viewer),
-                Box::new(input),
-                Box::new(model_selector),
-                Box::new(conversation_selector),
-            ],
+            components,
             should_quit: false,
             should_suspend: false,
             config,
@@ -318,15 +331,15 @@ User: {}
         // tui.mouse(true);
         tui.enter()?;
 
-        for component in self.components.iter_mut() {
+        for component in self.components.values_mut() {
             component.register_action_handler(action_tx.clone())?;
         }
 
-        for component in self.components.iter_mut() {
+        for component in self.components.values_mut() {
             component.register_config_handler(self.config.clone())?;
         }
 
-        for component in self.components.iter_mut() {
+        for component in self.components.values_mut() {
             component.init(tui.size()?)?;
         }
 
@@ -357,7 +370,7 @@ User: {}
                     }
                     _ => {}
                 }
-                for component in self.components.iter_mut() {
+                for component in self.components.values_mut() {
                     if let Some(action) = component.handle_events(Some(e.clone()))? {
                         action_tx.send(action).await?;
                     }
@@ -444,11 +457,11 @@ User: {}
                         let manager = &self.manager;
                         tui.draw(|f| {
                             let rect = f.size();
-                            let mut viewer_layout: Rect;
-                            let input_layout: Rect;
-                            let mut selector_layout: Option<Rect> = None;
 
-                            let layout1 = Layout::default()
+                            let mut layouts = HashMap::<AppPanel, Rect>::new();
+
+                            // Generate a top/bottom split
+                            let vertical_panels = Layout::default()
                                 .direction(Direction::Vertical)
                                 .constraints(vec![
                                     Constraint::Percentage(85),
@@ -456,89 +469,83 @@ User: {}
                                 ])
                                 .split(rect);
 
-                            viewer_layout = layout1[0];
-                            input_layout = layout1[1];
+                            // Input Panel is always visible
+                            layouts.insert(AppPanel::Input, vertical_panels[1]);
 
-                            if self.mode == Mode::ModelSelector
-                                || self.mode == Mode::ConversationManager
-                            {
-                                let layout2 = Layout::default()
-                                    .direction(Direction::Horizontal)
-                                    .constraints(vec![
-                                        Constraint::Percentage(70),
-                                        Constraint::Percentage(3),
-                                    ])
-                                    .split(viewer_layout);
-                                viewer_layout = layout2[0];
-                                selector_layout = Some(layout2[1]);
-                            }
+                            // If ModelSelector or ConversationSelector is not the current mode
+                            // the ViewerComponent makes up the entire top half
+                            match self.mode {
+                                Mode::Input | Mode::ActiveInput | Mode::ActiveViewer => {
+                                    layouts.insert(AppPanel::Viewer, vertical_panels[0]);
+                                }
+                                _ => {
+                                    let available_width = vertical_panels[0].width as f32;
+                                    let min_width: f32 = 75.0;
 
-                            let r =
-                                self.components[0].draw(f, viewer_layout, conversation, manager);
-                            if let Err(e) = r {
-                                let action_tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .await
-                                        .unwrap();
-                                });
-                            }
+                                    let panel_percentage: u16 =
+                                        ((min_width / available_width).min(1.0).max(0.3) * 100.0)
+                                            as u16;
 
-                            let r = self.components[1].draw(f, input_layout, conversation, manager);
-                            if let Err(e) = r {
-                                let action_tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .await
-                                        .unwrap();
-                                });
-                            }
+                                    if panel_percentage == 100 {
+                                        match self.mode {
+                                            Mode::ModelSelector => {
+                                                layouts.insert(
+                                                    AppPanel::ModelSelector,
+                                                    vertical_panels[0],
+                                                );
+                                            }
+                                            Mode::ConversationManager => {
+                                                layouts.insert(
+                                                    AppPanel::ConversationManager,
+                                                    vertical_panels[0],
+                                                );
+                                            }
+                                            _ => {}
+                                        }
+                                    } else {
+                                        let horizontal_panels = Layout::default()
+                                            .direction(Direction::Horizontal)
+                                            .constraints(vec![
+                                                Constraint::Percentage(100 - panel_percentage),
+                                                Constraint::Percentage(panel_percentage),
+                                            ])
+                                            .split(vertical_panels[0]);
 
-                            if let Some(selector_layout) = selector_layout {
-                                match self.mode {
-                                    Mode::ConversationManager => {
-                                        let r = self.components[3].draw(
-                                            f,
-                                            selector_layout,
-                                            conversation,
-                                            manager,
-                                        );
-                                        if let Err(e) = r {
-                                            let action_tx = action_tx.clone();
-                                            tokio::spawn(async move {
-                                                action_tx
-                                                    .send(Action::Error(format!(
-                                                        "Failed to draw: {:?}",
-                                                        e
-                                                    )))
-                                                    .await
-                                                    .unwrap();
-                                            });
+                                        layouts.insert(AppPanel::Viewer, horizontal_panels[0]);
+                                        match self.mode {
+                                            Mode::ConversationManager => {
+                                                layouts.insert(
+                                                    AppPanel::ConversationManager,
+                                                    horizontal_panels[1],
+                                                );
+                                            }
+                                            Mode::ModelSelector => {
+                                                layouts.insert(
+                                                    AppPanel::ModelSelector,
+                                                    horizontal_panels[1],
+                                                );
+                                            }
+                                            _ => {}
                                         }
                                     }
-                                    Mode::ModelSelector => {
-                                        let r = self.components[2].draw(
-                                            f,
-                                            selector_layout,
-                                            conversation,
-                                            manager,
-                                        );
-                                        if let Err(e) = r {
-                                            let action_tx = action_tx.clone();
-                                            tokio::spawn(async move {
-                                                action_tx
-                                                    .send(Action::Error(format!(
-                                                        "Failed to draw: {:?}",
-                                                        e
-                                                    )))
-                                                    .await
-                                                    .unwrap();
-                                            });
-                                        }
+                                }
+                            }
+
+                            for (panel, layout_rect) in layouts.into_iter() {
+                                if let Some(component) = self.components.get_mut(&panel) {
+                                    let r = component.draw(f, layout_rect, conversation, manager);
+                                    if let Err(e) = r {
+                                        let action_tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            action_tx
+                                                .send(Action::Error(format!(
+                                                    "Failed to draw: {:?}",
+                                                    e
+                                                )))
+                                                .await
+                                                .unwrap();
+                                        });
                                     }
-                                    _ => {}
                                 }
                             }
                         })?;
@@ -549,11 +556,10 @@ User: {}
                         tui.draw(|f| {
                             let rect = f.size();
 
-                            let mut viewer_layout: Rect;
-                            let input_layout: Rect;
-                            let mut selector_layout: Option<Rect> = None;
+                            let mut layouts = HashMap::<AppPanel, Rect>::new();
 
-                            let layout1 = Layout::default()
+                            // Generate a top/bottom split
+                            let vertical_panels = Layout::default()
                                 .direction(Direction::Vertical)
                                 .constraints(vec![
                                     Constraint::Percentage(85),
@@ -561,88 +567,83 @@ User: {}
                                 ])
                                 .split(rect);
 
-                            viewer_layout = layout1[0];
-                            input_layout = layout1[1];
-                            if self.mode == Mode::ModelSelector
-                                || self.mode == Mode::ConversationManager
-                            {
-                                let layout2 = Layout::default()
-                                    .direction(Direction::Horizontal)
-                                    .constraints(vec![
-                                        Constraint::Percentage(70),
-                                        Constraint::Percentage(30),
-                                    ])
-                                    .split(viewer_layout);
-                                viewer_layout = layout2[0];
-                                selector_layout = Some(layout2[1]);
-                            }
+                            // Input Panel is always visible
+                            layouts.insert(AppPanel::Input, vertical_panels[1]);
 
-                            let r =
-                                self.components[0].draw(f, viewer_layout, conversation, manager);
-                            if let Err(e) = r {
-                                let action_tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .await
-                                        .unwrap();
-                                });
-                            }
+                            // If ModelSelector or ConversationSelector is not the current mode
+                            // the ViewerComponent makes up the entire top half
+                            match self.mode {
+                                Mode::Input | Mode::ActiveInput | Mode::ActiveViewer => {
+                                    layouts.insert(AppPanel::Viewer, vertical_panels[0]);
+                                }
+                                _ => {
+                                    let available_width = vertical_panels[0].width as f32;
+                                    let min_width: f32 = 75.0;
 
-                            let r = self.components[1].draw(f, input_layout, conversation, manager);
-                            if let Err(e) = r {
-                                let action_tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {:?}", e)))
-                                        .await
-                                        .unwrap();
-                                });
-                            }
+                                    let panel_percentage: u16 =
+                                        ((min_width / available_width).min(1.0).max(0.3) * 100.0)
+                                            as u16;
 
-                            if let Some(selector_layout) = selector_layout {
-                                match self.mode {
-                                    Mode::ConversationManager => {
-                                        let r = self.components[3].draw(
-                                            f,
-                                            selector_layout,
-                                            conversation,
-                                            manager,
-                                        );
-                                        if let Err(e) = r {
-                                            let action_tx = action_tx.clone();
-                                            tokio::spawn(async move {
-                                                action_tx
-                                                    .send(Action::Error(format!(
-                                                        "Failed to draw: {:?}",
-                                                        e
-                                                    )))
-                                                    .await
-                                                    .unwrap();
-                                            });
+                                    if panel_percentage == 100 {
+                                        match self.mode {
+                                            Mode::ModelSelector => {
+                                                layouts.insert(
+                                                    AppPanel::ModelSelector,
+                                                    vertical_panels[0],
+                                                );
+                                            }
+                                            Mode::ConversationManager => {
+                                                layouts.insert(
+                                                    AppPanel::ConversationManager,
+                                                    vertical_panels[0],
+                                                );
+                                            }
+                                            _ => {}
+                                        }
+                                    } else {
+                                        let horizontal_panels = Layout::default()
+                                            .direction(Direction::Horizontal)
+                                            .constraints(vec![
+                                                Constraint::Percentage(100 - panel_percentage),
+                                                Constraint::Percentage(panel_percentage),
+                                            ])
+                                            .split(vertical_panels[0]);
+
+                                        layouts.insert(AppPanel::Viewer, horizontal_panels[0]);
+                                        match self.mode {
+                                            Mode::ConversationManager => {
+                                                layouts.insert(
+                                                    AppPanel::ConversationManager,
+                                                    horizontal_panels[1],
+                                                );
+                                            }
+                                            Mode::ModelSelector => {
+                                                layouts.insert(
+                                                    AppPanel::ModelSelector,
+                                                    horizontal_panels[1],
+                                                );
+                                            }
+                                            _ => {}
                                         }
                                     }
-                                    Mode::ModelSelector => {
-                                        let r = self.components[2].draw(
-                                            f,
-                                            selector_layout,
-                                            conversation,
-                                            manager,
-                                        );
-                                        if let Err(e) = r {
-                                            let action_tx = action_tx.clone();
-                                            tokio::spawn(async move {
-                                                action_tx
-                                                    .send(Action::Error(format!(
-                                                        "Failed to draw: {:?}",
-                                                        e
-                                                    )))
-                                                    .await
-                                                    .unwrap();
-                                            });
-                                        }
+                                }
+                            }
+
+                            for (panel, layout_rect) in layouts.into_iter() {
+                                if let Some(component) = self.components.get_mut(&panel) {
+                                    let r = component.draw(f, layout_rect, conversation, manager);
+                                    if let Err(e) = r {
+                                        let action_tx = action_tx.clone();
+                                        tokio::spawn(async move {
+                                            action_tx
+                                                .send(Action::Error(format!(
+                                                    "Failed to draw: {:?}",
+                                                    e
+                                                )))
+                                                .await
+                                                .unwrap();
+                                        });
                                     }
-                                    _ => {}
                                 }
                             }
                         })?;
@@ -661,7 +662,7 @@ User: {}
                     }
                     _ => {}
                 }
-                for component in self.components.iter_mut() {
+                for component in self.components.values_mut() {
                     if let Some(action) = component.update(action.clone())? {
                         action_tx.send(action).await?
                     };
