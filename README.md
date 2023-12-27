@@ -14,6 +14,8 @@ Built on [Replicate](https://replicate.com/) and [Ratatui](https://ratatui.rs/).
 
 Interact with different models within the same conversation. For example, you can ask Mistral to write a haiku, before asking CodeLlama to write a small html page, showing the haiku to the user.
 
+**Note:** This is very much a project in active development, there will be breaking changes, and bugs.
+
 ### Getting Started
 
 To interact with models you will need to set your [Replicate API Key](https://replicate.com/account/api-tokens) as the 'REPLICATE_API_KEY' environment variable.
@@ -38,6 +40,7 @@ Archer has only been tested on Linux systems. While all functionality is intende
 
 #### Quality of Life
 - [ ] Dynamic layouts for smaller screens
+  - [ ] Panics are occuring on smaller screens
 - [ ] Better formatting for code
 - [x] Manage for missing api keys early
 
