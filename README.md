@@ -39,14 +39,13 @@ Archer has only been tested on Linux systems. While all functionality is intende
 #### Quality of Life
 - [ ] Dynamic layouts for smaller screens
 - [ ] Better formatting for code
-- [ ] Manage for missing api keys early
+- [x] Manage for missing api keys early
 
 #### General Features
 - [x] Switching models
 - [x] Copy message
 - [x] Saving/Loading conversations
 - [x] Convo titles
-- [ ] Logging panel
 - [ ] Deleting conversations
 
 #### Release

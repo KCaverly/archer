@@ -16,6 +16,7 @@ pub mod utils;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::eyre::Result;
+use replicate_rs::config::ReplicateConfig;
 
 use crate::{
     app::App,
@@ -28,8 +29,17 @@ async fn tokio_main() -> Result<()> {
     initialize_panic_handler()?;
 
     let args = Cli::parse();
-    let mut app = App::new(args.tick_rate, args.frame_rate)?;
-    app.run().await?;
+
+    let config = ReplicateConfig::new();
+    match config {
+        Ok(..) => {
+            let mut app = App::new(args.tick_rate, args.frame_rate)?;
+            app.run().await?;
+        }
+        Err(err) => {
+            eprintln!("{err}");
+        }
+    };
 
     Ok(())
 }
