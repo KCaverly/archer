@@ -13,6 +13,8 @@ use strum_macros::EnumIter; // 0.17.1
 #[derive(Deserialize, Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     #[default]
+    NousHermes_2_Yi34b,
+    Dolphin2_6Mixtral8x7b,
     Dolphin2_5Mixtral8x7b,
     Yi34bChat,
     Llama2_13bChat,
@@ -27,9 +29,17 @@ pub enum CompletionModel {
 impl CompletionModel {
     pub fn get_model_details(&self) -> (String, String) {
         match self {
+            CompletionModel::NousHermes_2_Yi34b => (
+                "kcaverly".to_string(),
+                "nous-hermes-2-yi-34b-gguf".to_string(),
+            ),
             CompletionModel::Dolphin2_5Mixtral8x7b => (
                 "kcaverly".to_string(),
                 "dolphin-2.5-mixtral-8x7b-gguf".to_string(),
+            ),
+            CompletionModel::Dolphin2_6Mixtral8x7b => (
+                "kcaverly".to_string(),
+                "dolphin-2.6-mixtral-8x7b-gguf".to_string(),
             ),
             CompletionModel::Yi34bChat => ("01-ai".to_string(), "yi-34b-chat".to_string()),
             CompletionModel::Llama2_13bChat => ("meta".to_string(), "llama-2-13b-chat".to_string()),
@@ -55,8 +65,10 @@ impl CompletionModel {
 
     pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
         match self {
-            CompletionModel::Dolphin2_5Mixtral8x7b => {
-                let mut system_prompt = "You are Dolphin, a helpful AI assistant.".to_string();
+            CompletionModel::Dolphin2_5Mixtral8x7b
+            | CompletionModel::Dolphin2_6Mixtral8x7b
+            | CompletionModel::NousHermes_2_Yi34b => {
+                let mut system_prompt = "You are a helpful AI assistant, running in Llmit a Terminal chat Interface built by kcaverly.".to_string();
                 let mut prompt = String::new();
 
                 for message in messages {
@@ -154,9 +166,7 @@ impl CompletionModel {
                             prompt.push_str(format!("[INST] {content} [/INST]").as_str());
                         }
                         Role::Assistant => prompt.push_str(format!(" {content} </s>").as_str()),
-                        Role::System => {
-                            // Currently system prompts do nothing for Mistral
-                        }
+                        Role::System => {}
                     }
                 }
 
