@@ -132,12 +132,26 @@ impl ConversationManager {
             .unwrap();
     }
 
-    pub(crate) fn activate_selected_conversation(&mut self) {
-        self.active_conversation = self.selected_conversation;
+    pub(crate) fn get_selected_uuid(&mut self) -> anyhow::Result<Uuid> {
+        let ids = self
+            .conversation_files
+            .keys()
+            .into_iter()
+            .map(|x| x.clone())
+            .collect::<Vec<Uuid>>();
+        if let Some(id) = ids.get(self.selected_conversation) {
+            return Ok(*id);
+        } else {
+            return Err(anyhow!("Conversation not available"));
+        }
     }
 
-    pub(crate) fn delete_conversation(&self) -> anyhow::Result<()> {
-        todo!();
+    pub(crate) fn remove_conversation(&mut self, id: &Uuid) {
+        self.conversation_files.shift_remove(id);
+    }
+
+    pub(crate) fn activate_selected_conversation(&mut self) {
+        self.active_conversation = self.selected_conversation;
     }
 
     pub(crate) fn select_next_conversation(&mut self) {

@@ -88,7 +88,7 @@ impl App {
                 " j: select next; k: select prev; enter: select model; m: close; "
             }
             Mode::ConversationManager => {
-                " j: select next; k: select prev; n: new convo; enter: load convo; esc: close panel; "
+                " j: select next; k: select prev; n: new convo; enter: load convo; d: delete convo; esc: close panel; "
             }
         }
         .to_string();
@@ -424,6 +424,15 @@ User: {}
                         self.manager.activate_selected_conversation();
                         if let Some(convo) = self.manager.load_selected_conversation().ok() {
                             self.load_conversation(convo);
+                        }
+                    }
+                    Action::DeleteSelectedConversation => {
+                        if let Some(id) = self.manager.get_selected_uuid().ok() {
+                            let file_path = self.manager.get_file_path(&id);
+                            self.manager.remove_conversation(&id);
+                            tokio::spawn(async move {
+                                tokio::fs::remove_file(&file_path).await.ok();
+                            });
                         }
                     }
                     Action::AddConversationToManager(convo) => {

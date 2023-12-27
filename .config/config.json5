@@ -64,6 +64,7 @@
         "<j>": "SelectNextConversation",
         "<k>": "SelectPreviousConversation",
         "<n>": "NewConversation",
+        "<d>": "DeleteSelectedConversation",
         "<enter>": "LoadSelectedConversation",
       }
   }
