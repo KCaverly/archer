@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-pub(crate) const CONVERSATION_DIR: &str = ".llmit/conversations/";
+pub(crate) const CONVERSATION_DIR: &str = ".archer/conversations/";
 
 fn get_conversation_dir() -> PathBuf {
     if let Some(conversation_dir) = home_dir().and_then(|x| Some(x.join(CONVERSATION_DIR))) {

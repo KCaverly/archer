@@ -20,7 +20,7 @@ To interact with models you will need to set your [Replicate API Key](https://re
 
 ### Platform Specific Functionality
 
-LLMit has only been tested on Linux systems. While all functionality is intended to work cross-platform, there may be concerns working with the clipboard on different platforms. If there are any concerns, please file an Issue.
+Archer has only been tested on Linux systems. While all functionality is intended to work cross-platform, there may be concerns working with the clipboard on different platforms. If there are any concerns, please file an Issue.
 
 ### Roadmap to v0
 
@@ -28,13 +28,13 @@ LLMit has only been tested on Linux systems. While all functionality is intended
 - [x] Concurrent requests
 - [x] Status updating
 - [x] Better error handling
-- [ ] Bubble chat messages
+- [x] Bubble chat messages
   - [x] Add status to assistant tags
   - [x] Manage for text wrapping
-  - [ ] Left align status
-  - [ ] Trim empty whitespace from beginning and end of content
-  - [ ] Update keymap hints
-  - [ ] Add select message functionality
+  - [x] Left align status
+  - [x] Trim empty whitespace from beginning and end of content
+  - [x] Update keymap hints
+  - [x] Add select message functionality
 
 #### Quality of Life
 - [ ] Dynamic layouts for smaller screens

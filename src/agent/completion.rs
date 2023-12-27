@@ -13,7 +13,7 @@ use strum_macros::EnumIter; // 0.17.1
 #[derive(Deserialize, Copy, EnumIter, Default, Eq, PartialEq, Debug, Clone, Serialize)]
 pub enum CompletionModel {
     #[default]
-    NousHermes_2_Yi34b,
+    NousHermes2Yi34b,
     Dolphin2_6Mixtral8x7b,
     Dolphin2_5Mixtral8x7b,
     Yi34bChat,
@@ -29,7 +29,7 @@ pub enum CompletionModel {
 impl CompletionModel {
     pub fn get_model_details(&self) -> (String, String) {
         match self {
-            CompletionModel::NousHermes_2_Yi34b => (
+            CompletionModel::NousHermes2Yi34b => (
                 "kcaverly".to_string(),
                 "nous-hermes-2-yi-34b-gguf".to_string(),
             ),
@@ -67,8 +67,8 @@ impl CompletionModel {
         match self {
             CompletionModel::Dolphin2_5Mixtral8x7b
             | CompletionModel::Dolphin2_6Mixtral8x7b
-            | CompletionModel::NousHermes_2_Yi34b => {
-                let mut system_prompt = "You are a helpful AI assistant, running in Llmit a Terminal chat Interface built by kcaverly.".to_string();
+            | CompletionModel::NousHermes2Yi34b => {
+                let mut system_prompt = "You are a helpful AI assistant, running in Archer a Terminal chat Interface built by kcaverly.".to_string();
                 let mut prompt = String::new();
 
                 for message in messages {
