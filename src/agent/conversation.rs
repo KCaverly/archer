@@ -259,14 +259,6 @@ impl Conversation {
         *self.messages.get_mut(&id).unwrap() = message;
     }
 
-    pub fn unfocus(&mut self) {
-        // We are no longer changing which note is selected when we focus
-    }
-
-    pub fn focus(&mut self) {
-        // No longer change which note is selected when we focus
-    }
-
     pub fn get_selected_message(&self) -> anyhow::Result<Message> {
         if let Some(Some(uuid)) = self.selected_message.map(|idx| self.get_uuid_by_index(idx)) {
             if let Some(message) = self.messages.get(&uuid) {

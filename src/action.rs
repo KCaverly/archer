@@ -41,8 +41,6 @@ pub enum Action {
     SelectNextConversation,
     LoadSelectedConversation,
     AddConversationToManager(Conversation),
-    FocusConversation,
-    UnfocusConversation,
     NewConversation,
     SaveConversation,
     SetTitle(String),
@@ -96,10 +94,8 @@ impl<'de> Deserialize<'de> for Action {
                         match mode {
                             "Input" => Ok(Action::SwitchMode(Mode::Input)),
                             "ActiveInput" => Ok(Action::SwitchMode(Mode::ActiveInput)),
-                            "Viewer" => Ok(Action::SwitchMode(Mode::Viewer)),
                             "ActiveViewer" => Ok(Action::SwitchMode(Mode::ActiveViewer)),
                             "ModelSelector" => Ok(Action::SwitchMode(Mode::ModelSelector)),
-                            "MessageViewer" => Ok(Action::SwitchMode(Mode::MessageViewer)),
                             "ConversationManager" => {
                                 Ok(Action::SwitchMode(Mode::ConversationManager))
                             }

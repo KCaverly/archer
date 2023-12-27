@@ -6,6 +6,7 @@ use std::{fmt, fs};
 use textwrap::core::Word;
 use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
+use uuid::Uuid;
 
 use color_eyre::eyre::Result;
 use indexmap::IndexMap;
@@ -25,13 +26,11 @@ use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 enum ViewerState {
     Active,
-    Focused,
     #[default]
     Unfocused,
-    Maximized,
 }
 
 #[derive(Default)]
@@ -48,15 +47,8 @@ pub struct Viewer {
 }
 
 impl Viewer {
-    pub fn new(focused: bool) -> Self {
-        let state = if focused {
-            ViewerState::Focused
-        } else {
-            ViewerState::Unfocused
-        };
-
+    pub fn new() -> Self {
         Self {
-            state,
             ..Default::default()
         }
     }
@@ -162,13 +154,14 @@ impl Viewer {
         width: usize,
     ) -> VisibleMessages {
         let mut messages = Vec::new();
-        for (_, message) in &conversation.messages {
+        for (id, message) in &conversation.messages {
             let mut lines = vec![self.get_title_line(&message, width)];
             lines.extend(self.get_lines_from_content(&message.content, width));
 
             messages.push(VisibleMessage {
                 lines,
                 role: message.role.clone(),
+                uuid: id.clone(),
             });
         }
 
@@ -201,35 +194,17 @@ impl Component for Viewer {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
             Action::SwitchMode(mode) => match mode {
-                Mode::Viewer => {
-                    self.state = ViewerState::Focused;
-                    if let Some(action_tx) = self.command_tx.clone() {
-                        tokio::spawn(async move {
-                            action_tx.send(Action::UnfocusConversation).await.ok()
-                        });
-                    }
+                Mode::Input => {
+                    self.state = ViewerState::Unfocused;
                 }
                 Mode::ActiveViewer => {
                     self.state = ViewerState::Active;
-                    if let Some(action_tx) = self.command_tx.clone() {
-                        tokio::spawn(async move {
-                            action_tx.send(Action::FocusConversation).await.ok()
-                        });
-                    }
                 }
                 Mode::ModelSelector => {
                     self.state = ViewerState::Unfocused;
-                    if let Some(action_tx) = self.command_tx.clone() {
-                        tokio::spawn(async move {
-                            action_tx.send(Action::UnfocusConversation).await.ok()
-                        });
-                    }
                 }
-                Mode::Input | Mode::ActiveInput | Mode::ConversationManager => {
+                Mode::ActiveInput | Mode::ConversationManager => {
                     self.state = ViewerState::Unfocused;
-                }
-                Mode::MessageViewer => {
-                    self.state = ViewerState::Maximized;
                 }
             },
             Action::ScrollUp => {
@@ -273,7 +248,14 @@ impl Component for Viewer {
             .title_alignment(Alignment::Left)
             .borders(Borders::ALL)
             .border_type(BorderType::Thick)
-            .style(Style::default().fg(FOCUSED_COLOR).bg(Color::Black));
+            .style(
+                Style::default()
+                    .fg(match self.state {
+                        ViewerState::Active => ACTIVE_COLOR,
+                        _ => UNFOCUSED_COLOR,
+                    })
+                    .bg(Color::Black),
+            );
         f.render_widget(block.clone(), rect);
 
         let inner = rect.inner(&Margin {
@@ -284,11 +266,45 @@ impl Component for Viewer {
         self.visible_height = (inner.height - 1) as usize;
         let message_width = 100;
 
-        let (visible_start, visible_end) = self.get_visible_ranges();
+        let selected_uuid = match self.state {
+            ViewerState::Active => conversation.get_selected_uuid(),
+            _ => None,
+        };
 
+        let state = self.state.clone();
+        let visible_height = self.visible_height.clone();
+        let (mut visible_start, mut visible_end) = self.get_visible_ranges();
         let messages = self.get_visible_messages(conversation, message_width);
         let total_len = messages.total_len();
-        messages.render(f, inner, visible_start, visible_end, message_width as u16);
+
+        let (visible_start, visible_end) = match state {
+            ViewerState::Active => {
+                if let Some(mut visible_end) = messages.length_at_uuid(selected_uuid) {
+                    if visible_end < visible_height {
+                        visible_start = 0;
+                        visible_end = visible_height;
+                    } else {
+                        visible_start = visible_end.max(visible_height) - visible_height;
+                    }
+
+                    (visible_start, visible_end)
+                } else {
+                    (visible_start, visible_end)
+                }
+            }
+            _ => (visible_start, visible_end),
+        };
+
+        messages.render(
+            f,
+            inner,
+            visible_start,
+            visible_end,
+            message_width as u16,
+            selected_uuid,
+        );
+
+        self.visible_end = visible_end;
 
         if self.scrollable {
             let scrollbar = Scrollbar::default()
@@ -307,6 +323,7 @@ impl Component for Viewer {
 struct VisibleMessage<'a> {
     lines: Vec<Line<'a>>,
     role: Role,
+    uuid: Uuid,
 }
 
 #[derive(Clone)]
@@ -329,6 +346,20 @@ impl<'a> VisibleMessages<'a> {
             .sum::<usize>()
     }
 
+    fn length_at_uuid(&self, uuid: Option<Uuid>) -> Option<usize> {
+        if let Some(uuid) = uuid {
+            let mut length = 0;
+            for message in &self.messages {
+                length += message.lines.iter().len() + 2;
+
+                if message.uuid == uuid {
+                    return Some(length);
+                }
+            }
+        }
+        None
+    }
+
     fn render(
         &self,
         f: &mut Frame<'_>,
@@ -336,6 +367,7 @@ impl<'a> VisibleMessages<'a> {
         visible_start: usize,
         visible_end: usize,
         width: u16,
+        selected_uuid: Option<Uuid>,
     ) {
         let mut y = rect.y;
 
@@ -383,9 +415,20 @@ impl<'a> VisibleMessages<'a> {
             };
 
             let message_len = message_lines.iter().len();
+            let message_color = if let Some(selected_uuid) = selected_uuid {
+                if message.uuid == selected_uuid {
+                    ACTIVE_COLOR
+                } else {
+                    FOCUSED_COLOR
+                }
+            } else {
+                FOCUSED_COLOR
+            };
+
             let block = Block::default()
                 .borders(borders)
-                .border_type(BorderType::Rounded);
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(message_color));
             let paragraph = Paragraph::new(Text::from(message_lines)).block(block);
 
             let height = (message_len + border_height) as u16;

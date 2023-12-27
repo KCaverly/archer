@@ -470,7 +470,7 @@ mod tests {
         let c = Config::new()?;
         assert_eq!(
             c.keybindings
-                .get(&Mode::Viewer)
+                .get(&Mode::Input)
                 .unwrap()
                 .get(&parse_key_sequence("<q>").unwrap_or_default())
                 .unwrap(),
