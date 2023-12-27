@@ -1,5 +1,7 @@
 use futures::StreamExt;
+use lazy_static::lazy_static;
 use ratatui::widgets::block::Title;
+use regex::Regex;
 use std::str::from_utf8;
 use std::time::{Duration, Instant};
 use std::{fmt, fs};
@@ -25,6 +27,10 @@ use crate::{action::Action, tui::Frame};
 use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};
+
+lazy_static! {
+    static ref WHITESPACE_RE: Regex = Regex::new(r"\s*[^\s]+").unwrap();
+}
 
 #[derive(Clone, Default)]
 enum ViewerState {
@@ -120,9 +126,10 @@ impl Viewer {
         let content = content.trim_matches('\n');
 
         for line in content.lines() {
-            let words = WordSeparator::AsciiSpace
+            let words = WordSeparator::Custom(split_sentence)
                 .find_words(line)
                 .collect::<Vec<_>>();
+
             let subs = lines_to_strings(
                 wrap_optimal_fit(&words, &[visible_width as f64], &Penalties::new()).unwrap(),
             );
@@ -451,15 +458,32 @@ impl<'a> VisibleMessages<'a> {
     }
 }
 
-// Helper to convert wrapped lines to a Vec<String>.
+fn split_sentence(line: &str) -> Box<dyn Iterator<Item = Word<'_>> + '_> {
+    let words = WHITESPACE_RE
+        .find_iter(line)
+        .map(|word| Word::from(word.as_str()));
+    Box::new(words.into_iter())
+}
+
 fn lines_to_strings(lines: Vec<&[Word<'_>]>) -> Vec<String> {
     lines
         .iter()
-        .map(|line| {
-            line.iter()
-                .map(|word| &**word)
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
+        .map(|line| line.iter().map(|word| &**word).collect::<Vec<_>>().join(""))
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_split_sentence() {
+        assert_eq!(
+            split_sentence("    this is a sentence")
+                .map(|x| x.to_string())
+                .collect::<Vec<String>>(),
+            vec!["    this", " is", " a", " sentence"]
+        );
+    }
 }
