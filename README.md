@@ -50,6 +50,7 @@ Archer has only been tested on Linux systems. While all functionality is intende
 - [x] Saving/Loading conversations
 - [x] Convo titles
 - [x] Deleting conversations
+- [ ] Paste to input
 
 #### Release
 - [ ] Work out proper versioning
