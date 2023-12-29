@@ -120,7 +120,7 @@ impl Viewer {
     }
 
     pub fn get_lines_from_content<'a>(&self, content: &'a str, width: usize) -> Vec<Line<'a>> {
-        let visible_width = width.max(2) - 4;
+        let visible_width = width.max(4) - 4;
         let mut lines = vec![Line::styled("", Style::default())];
 
         let content = content.trim_matches('\n');
@@ -272,7 +272,7 @@ impl Component for Viewer {
         });
 
         self.visible_height = (inner.height - 1) as usize;
-        let message_width = 100;
+        let message_width = (inner.width.min(105) - 1) as usize;
 
         let selected_uuid = match self.state {
             ViewerState::Active => conversation.get_selected_uuid(),

@@ -39,8 +39,8 @@ Archer has only been tested on Linux systems. While all functionality is intende
   - [x] Add select message functionality
 
 #### Quality of Life
-- [ ] Dynamic layouts for smaller screens
-  - [ ] Panics are occuring on smaller screens
+- [x] Dynamic layouts for smaller screens
+  - [x] Panics are occuring on smaller screens
 - [ ] Better formatting for code
 - [x] Manage for missing api keys early
 
@@ -50,7 +50,11 @@ Archer has only been tested on Linux systems. While all functionality is intende
 - [x] Saving/Loading conversations
 - [x] Convo titles
 - [x] Deleting conversations
-- [ ] Paste to input
+- [ ] Improve Input Dynamics
+  - [ ] Paste to Input
+  - [ ] Show Cursor
+  - [ ] Scrollable
+  - [ ] Maximize (for overflow inputs)?
 
 #### Release
 - [ ] Work out proper versioning
