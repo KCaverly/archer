@@ -12,9 +12,10 @@ Built on [Replicate](https://replicate.com/) and [Ratatui](https://ratatui.rs/).
 
 ![basic_chat](basic_chat.png)
 
-Interact with different models within the same conversation. For example, you can ask Mistral to write a haiku, before asking CodeLlama to write a small html page, showing the haiku to the user.
+Plug and play with a wide variety of open source Large Language Models, inside an intuitive and keyboard driven TUI.
 
-**Note:** This is very much a project in active development, there will be breaking changes, and bugs.
+This is very much a project in active development, there will be breaking changes, and bugs.
+Currently, multi-model chat functionality is available, along with conversation loading and saving.
 
 ### Getting Started
 
@@ -51,10 +52,11 @@ Archer has only been tested on Linux systems. While all functionality is intende
 - [x] Convo titles
 - [x] Deleting conversations
 - [ ] Improve Input Dynamics
-  - [ ] Paste to Input
-  - [ ] Show Cursor
+  - [x] Paste to Input
+  - [x] Show Cursor
   - [ ] Scrollable
   - [ ] Maximize (for overflow inputs)?
+  - [ ] Shift + Enter for New Line
 
 #### Release
 - [ ] Work out proper versioning
