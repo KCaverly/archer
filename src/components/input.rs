@@ -1,10 +1,11 @@
 use std::time::Instant;
 
 use color_eyre::eyre::Result;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::widgets::block::{Position, Title};
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
+use tui_textarea::{Input, Key, TextArea};
 
 use super::Component;
 use crate::agent::completion::CompletionModel;
@@ -28,12 +29,10 @@ enum InputState {
 pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
-    current_input: String,
-    display_spans: Vec<Span<'a>>,
-    slash_command: bool,
     state: InputState,
     active_model: CompletionModel,
     keymap: String,
+    textarea: TextArea<'a>,
 }
 
 impl MessageInput<'static> {
@@ -65,45 +64,22 @@ impl Component for MessageInput<'static> {
     fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
         if self.state == InputState::Active {
             match key.code {
-                KeyCode::Char(c) => {
-                    if (c == '/' && self.current_input == String::new())
-                        || (self.slash_command && c != ' ')
-                    {
-                        self.slash_command = true;
-                        self.display_spans.push(Span::styled(
-                            c.to_string(),
-                            Style::default().fg(Color::Cyan).bold(),
-                        ));
-                    } else if c == ' ' {
-                        self.slash_command = false;
-                        self.display_spans.push(Span::styled(
-                            c.to_string(),
-                            Style::default().fg(Color::White),
-                        ));
-                    } else {
-                        self.display_spans.push(Span::styled(
-                            c.to_string(),
-                            Style::default().fg(Color::White),
-                        ));
-                    }
-                    self.current_input.push(c);
-                }
-                KeyCode::Backspace => {
-                    self.display_spans.pop();
-                    self.current_input.pop();
-                }
                 KeyCode::Enter => {
-                    let action = Action::SendMessage(Message {
-                        role: Role::User,
-                        content: self.current_input.clone(),
-                        status: None,
-                        model: Some(self.active_model.clone()),
-                    });
-                    self.display_spans = Vec::new();
-                    self.current_input = String::new();
-                    return Ok(Some(action));
+                    let content = self.textarea.lines().join("\n");
+                    if content.len() > 0 {
+                        let action = Action::SendMessage(Message {
+                            role: Role::User,
+                            content,
+                            status: None,
+                            model: Some(self.active_model.clone()),
+                        });
+                        self.textarea = TextArea::default();
+                        return Ok(Some(action));
+                    }
                 }
-                _ => {}
+                _ => {
+                    self.textarea.input(key);
+                }
             }
         }
 
@@ -142,35 +118,30 @@ impl Component for MessageInput<'static> {
         conversation: &Conversation,
         manager: &ConversationManager,
     ) -> Result<()> {
-        let text = Text::from(Line::from(self.display_spans.clone()));
         let (model_owner, model_name) = self.active_model.get_model_details();
-        let paragraph = Paragraph::new(text)
-            .block(
-                Block::default()
-                    .title(
-                        Title::from(format!(" Message ({model_owner}/{model_name}) "))
-                            .alignment(Alignment::Left),
-                    )
-                    .title(
-                        Title::from(self.keymap.clone())
-                            .alignment(Alignment::Center)
-                            .position(Position::Bottom),
-                    )
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Thick)
-                    .style(
-                        Style::default()
-                            .fg(match self.state {
-                                InputState::Active => ACTIVE_COLOR,
-                                InputState::Focused => FOCUSED_COLOR,
-                                InputState::Unfocused => UNFOCUSED_COLOR,
-                            })
-                            .bg(Color::Black),
-                    ),
+        let block = Block::default()
+            .title(
+                Title::from(format!(" Message ({model_owner}/{model_name}) "))
+                    .alignment(Alignment::Left),
             )
-            .alignment(Alignment::Left)
-            .wrap(Wrap { trim: true });
-        f.render_widget(paragraph, rect);
+            .title(
+                Title::from(self.keymap.clone())
+                    .alignment(Alignment::Center)
+                    .position(Position::Bottom),
+            )
+            .borders(Borders::ALL)
+            .border_type(BorderType::Thick)
+            .style(Style::default().fg(match self.state {
+                InputState::Active => ACTIVE_COLOR,
+                InputState::Focused => FOCUSED_COLOR,
+                InputState::Unfocused => UNFOCUSED_COLOR,
+            }))
+            .bg(Color::Black);
+
+        self.textarea.set_block(block);
+        self.textarea.set_cursor_line_style(Style::default());
+
+        f.render_widget(self.textarea.widget(), rect);
         Ok(())
     }
 }
