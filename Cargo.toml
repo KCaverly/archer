@@ -21,7 +21,8 @@ lazy_static = "1.4.0"
 libc = "0.2.148"
 log = "0.4.20"
 pretty_assertions = "1.4.0"
-ratatui = { version = "0.24.0", features = ["serde", "macros"] }
+tui-textarea = "0.4.0"
+ratatui = { version = "0.24", features = ["serde", "macros"] }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
 signal-hook = "0.3.17"
@@ -47,5 +48,4 @@ walkdir = "2.4.0"
 dirs = "5.0.1"
 async-trait = "0.1.75"
 regex = "1.10.2"
-tui-textarea = "0.4.0"
 cargo-aur = "1.6.0"
