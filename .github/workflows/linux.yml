@@ -21,7 +21,7 @@ jobs:
             archive: tar.gz
 
     outputs:
-      - release_tag: ${{ steps.release.outputs.release_tag }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
 
     steps:
       - name: Checkout
