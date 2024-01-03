@@ -3,6 +3,9 @@ name = "archer"
 version = "0.1.2"
 edition = "2021"
 description = "An async terminal interface for interacting with multi-stage LLM agents."
+homepage = "https://kcaverly.dev"
+repository = "https://github.com/kcaverly/archer"
+license = "MIT"
 
 authors = ["KCaverly"]
 
