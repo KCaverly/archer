@@ -12,12 +12,16 @@ jobs:
   build_and_release:
     name: release ${{ matrix.target }}
     runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             archive: tar.gz
+
+    outputs:
+      - release_tag: ${{ steps.release.outputs.release_tag }}
 
     steps:
       - name: Checkout
@@ -37,27 +41,42 @@ jobs:
           "./target/${{ matrix.target }}/release/archer"
 
       - name: Release
+        id: release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "target/${{ matrix.target }}/release/archer"
+        env:
+          RELEASE_TAG: ${{ github.ref }}
 
-      - name: Install cargo-aur
-        run: cargo install cargo-aur
+  publish_to_aur:
+    name: "publish to aur"
+    runs-on: ubuntu-latest
 
-      - name: Generate details for AUR
-        run: cargo aur
+    strategy:
+      fail-fast: true
+      matrix:
+        target:
+          -x86_64-unknown-linux-gnu
 
-      - name: Move files generated to top level
-        run: mv ./target/cargo-aur/PKGBUILD ./PKGBUILD
+    needs:
+      - build_and_release
 
-      - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Generate PKGBUILD
+        env:
+          TARGET: ${{ matrix.target }}
+          RELEASE_TAG: ${{ needs.build_and_release.outputs.release_tag }}
+        run: ./ci/github-actions/generate-pkgbuild.py3
+    
+      - name: Publish archer to the AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v2.0.2
         with:
-          pkgname: archer-bin
-          pkgbuild: ./PKGBUILD"
+          pkgname: archer
+          pkgbuild: ./pkgbuild/archer/PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: Update AUR package
-          ssh_keyscan_types: rsa,dsa,ecdsa,ed25519
+          commit_message: ${{ needs.create_release.outputs.release_tag }}
