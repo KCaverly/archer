@@ -48,6 +48,9 @@ jobs:
       - name: Generate details for AUR
         run: cargo aur
 
+      - name: Show files generated
+        run: ls -la ./target/cargo-aur
+
       - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
         with:
