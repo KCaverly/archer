@@ -7,62 +7,23 @@ on:
 
 jobs:
 
-  build-and-upload:
-    name: Build and Upload
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - build: linux
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-
+  linux-amd:
+    runs-on: ubuntu-latest
     steps:
-      - name: Clone Repository
-        uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-
-      - name: Get the release version from the tag
-        shell: bash
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-
+          targets: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ".bin"
       - name: Build project
-        uses: rust-build/rust-build.action@v1.4.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          RUSTTARGET: ${{ matrix.target }}
-          EXTRA_FILES: "README.md LICENSE"
-          UPLOAD_MODE: none
-
-      - name: Build archive
-        shell: bash
         run: |
-          binary_name="archer"
-
-          dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
-          mkdir "$dirname"
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv "target/${{ matrix.target }}/release/$binary_name.exe" "$dirname"
-          else
-            mv "target/${{ matrix.target }}/release/$binary_name" "$dirname"
-          fi
-
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            7z a "$dirname.zip" "$dirname"
-            echo "ASSET=$dirname.zip" >> $GITHUB_ENV
-          else
-            tar -czf "$dirname.tar.gz" "$dirname"
-            echo "ASSET=$dirname.tar.gz" >> $GITHUB_ENV
-          fi
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
+          cargo build --release --target x86_64-unknown-linux-gnu
+          ./target/x86_64-unknown-linux-gnu/release/archer
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
         with:
-          files: |
-            ${{ env.ASSET }}
+          name: x86_64-unknown-linux-gnu
+          path: |
+            target/x86_64-unknown-linux-gnu/release/archer
