@@ -1,6 +1,6 @@
 [package]
 name = "archer"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 description = "An async terminal interface for interacting with multi-stage LLM agents."
 homepage = "https://kcaverly.dev"
