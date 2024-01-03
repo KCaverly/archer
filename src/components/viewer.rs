@@ -281,7 +281,7 @@ impl Component for Viewer {
 
         let state = self.state.clone();
         let visible_height = self.visible_height.clone();
-        let (mut visible_start, mut visible_end) = self.get_visible_ranges();
+        let (mut visible_start, visible_end) = self.get_visible_ranges();
         let messages = self.get_visible_messages(conversation, message_width);
         let total_len = messages.total_len();
 

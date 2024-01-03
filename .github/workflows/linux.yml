@@ -11,16 +11,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
+          
       - name: Build project
         run: |
           cargo build --release --target x86_64-unknown-linux-gnu
           ./target/x86_64-unknown-linux-gnu/release/archer
+
+      - name: Show files completed by build action
+        run: |
+          ls -la ./target/x86_64-unknown-linux-gnu/release
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
