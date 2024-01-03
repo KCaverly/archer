@@ -91,6 +91,9 @@ jobs:
       - name: Generate PKGBUILD
         run: cargo aur
 
+      - name: Update pkgver in PKGBUILD
+        run: sed -i 's/v$pkgver/$pkgver/g' ./target/cargo-aur/PKGBUILD
+
       - name: Upload aur binary to existing release
         uses: svenstaro/upload-release-action@v2
         with:
