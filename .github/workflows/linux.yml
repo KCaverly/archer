@@ -27,7 +27,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Depedencies
+      - name: Install Dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: pkg-config libssl-dev
@@ -36,10 +36,10 @@ jobs:
         shell: bash
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Build project
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: false
           command: build
           args: --verbose --release --target ${{ matrix.target }}
 
