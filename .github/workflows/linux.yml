@@ -1,4 +1,6 @@
 name: Build and Release on Linux
+permissions:
+  contents: write
 
 on:
   push:
