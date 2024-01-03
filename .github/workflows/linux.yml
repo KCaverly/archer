@@ -34,18 +34,32 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: ".bin"
-          
-      - name: Build project
+
+      - name: Compile and release
+        uses: rust-build/rust-build.action@v1.4.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          RUSTTARGET: ${{ matrix.target }}
+          EXTRA_FILES: "README.md LICENSE"
+          ARCHIVE_TYPES: ${{ matrix.archive }}
+          UPLOAD_MODE: none
+          ARCHIVE_NAME: "archer-{{ github.ref }}-{{ matrix.target }}.{{ matrix.archive }}"
+
+      # - name: Build project
+      #   run: |
+      #     cargo build --release --target ${{ matrix.target }}
+      #     "./target/${{ matrix.target }}/release/archer-${{ github.ref }}-${{ matrix.target }}"
+
+      - name: Compress project
         run: |
-          cargo build --release --target ${{ matrix.target }}
-          "./target/${{ matrix.target }}/release/archer"
 
       - name: Release
         id: release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: "target/${{ matrix.target }}/release/archer"
+          files: "target/${{ matrix.target }}/release/archer-${{ github.ref }}-${{ matrix.target }}.{{ matrix.archve }}"
         env:
           RELEASE_TAG: ${{ github.ref }}
 
