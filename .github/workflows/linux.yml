@@ -48,14 +48,14 @@ jobs:
       - name: Generate details for AUR
         run: cargo aur
 
-      - name: Show files generated
-        run: ls -la ./target/cargo-aur
+      - name: Move files generated to top level
+        run: mv ./target/cargo-aur/PKGBUILD ./PKGBUILD
 
       - name: Publish to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v2.7.0
         with:
           pkgname: archer-bin
-          pkgbuild: target/cargo-aur/PKGBUILD"
+          pkgbuild: ./PKGBUILD"
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
