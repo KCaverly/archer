@@ -26,6 +26,13 @@ jobs:
       - name: Clone Repository
         uses: actions/checkout@v3
 
+      - name: Install Prerequisites
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            apt-get install -y pkg-config libssl-dev
+          fi
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
