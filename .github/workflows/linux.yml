@@ -65,18 +65,23 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       
-      - name: Generate PKGBUILD
-        env:
-          TARGET: ${{ matrix.target }}
-          RELEASE_TAG: ${{ needs.build_and_release.outputs.release_tag }}
-        run: ./ci/github-actions/generate-pkgbuild.py3
-    
-      - name: Publish archer to the AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v2.0.2
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          pkgname: archer
-          pkgbuild: ./pkgbuild/archer/PKGBUILD
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install cargo-aur
+        run: cargo install cargo-aur
+
+      - name: Generate PKGBUILD
+        run: cargo aur
+
+      - name: Release AUR package
+        uses: jbouter/aur-releaser@v0.0.9
+        with:
+          pkgname: archer-bin
+          pkgbuild: ./target/cargo-aur/PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: ${{ needs.create_release.outputs.release_tag }}
+          commit_message: Update AUR package
+          ssh_keyscan_types: rsa,dsa,ecdsa,ed25519
