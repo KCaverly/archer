@@ -28,7 +28,7 @@ To interact with models you will need to set your [Replicate API Key](https://re
 archer is on the AUR!
 
 ```bash
-yay install archer
+yay -S archer
 ```
 
 ### Platform Specific Functionality
