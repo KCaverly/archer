@@ -417,7 +417,7 @@ User: {}
                                 .set()
                                 .wait()
                                 .clipboard(LinuxClipboardKind::Clipboard)
-                                .jext(content.clone());
+                                .text(content.clone());
                         });
 
                         let content = selected_message.content.clone();
