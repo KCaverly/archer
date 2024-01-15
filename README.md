@@ -21,43 +21,16 @@ Currently, multi-model chat functionality is available, along with conversation 
 
 To interact with models you will need to set your [Replicate API Key](https://replicate.com/account/api-tokens) as the 'REPLICATE_API_KEY' environment variable.
 
+### Installation
+
+#### Arch
+
+archer is on the AUR!
+
+```bash
+yay -S archer
+```
+
 ### Platform Specific Functionality
 
 Archer has only been tested on Linux systems. While all functionality is intended to work cross-platform, there may be concerns working with the clipboard on different platforms. If there are any concerns, please file an Issue.
-
-### Roadmap to v0
-
-#### Stability
-- [x] Concurrent requests
-- [x] Status updating
-- [x] Better error handling
-- [x] Bubble chat messages
-  - [x] Add status to assistant tags
-  - [x] Manage for text wrapping
-  - [x] Left align status
-  - [x] Trim empty whitespace from beginning and end of content
-  - [x] Update keymap hints
-  - [x] Add select message functionality
-
-#### Quality of Life
-- [x] Dynamic layouts for smaller screens
-  - [x] Panics are occuring on smaller screens
-- [ ] Better formatting for code
-- [x] Manage for missing api keys early
-
-#### General Features
-- [x] Switching models
-- [x] Copy message
-- [x] Saving/Loading conversations
-- [x] Convo titles
-- [x] Deleting conversations
-- [ ] Improve Input Dynamics
-  - [x] Paste to Input
-  - [x] Show Cursor
-  - [ ] Scrollable
-  - [ ] Maximize (for overflow inputs)?
-  - [ ] Shift + Enter for New Line
-
-#### Release
-- [ ] Work out proper versioning
-- [ ] Ci/Cd
