@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use color_eyre::eyre::Result;
-use crossterm::event::{KeyCode, KeyEventKind, KeyModifiers, ModifierKeyCode};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::widgets::block::{Position, Title};
 use ratatui::{prelude::*, widgets::*};
 use tokio::sync::mpsc::UnboundedSender;
@@ -78,7 +78,20 @@ impl Component for MessageInput<'static> {
                     }
                 }
                 _ => {
-                    self.textarea.input(key);
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        match key.code {
+                            KeyCode::Char(char) => {
+                                if char == 'n' {
+                                    self.textarea.insert_str("\n");
+                                }
+                            }
+                            _ => {
+                                self.textarea.input(key);
+                            }
+                        };
+                    } else {
+                        self.textarea.input(key);
+                    }
                 }
             }
         }

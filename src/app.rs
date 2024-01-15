@@ -93,7 +93,7 @@ impl App {
     pub fn set_keymap(&mut self) {
         self.keymap = match self.mode {
             Mode::Input => " i: insert; v: focus viewer; j: scroll down; k: scroll up; m: change model; c: change convo; q: quit; ",
-            Mode::ActiveInput => " enter: send message; esc: exit input mode; ",
+            Mode::ActiveInput => " enter: send message; ctrl+n: new line; esc: exit input mode; ",
             Mode::ActiveViewer => {
                 " j: select next; k: select prev; c: copy; esc: exit scroll mode; "
             }
@@ -417,7 +417,7 @@ User: {}
                                 .set()
                                 .wait()
                                 .clipboard(LinuxClipboardKind::Clipboard)
-                                .text(content.clone());
+                                .jext(content.clone());
                         });
 
                         let content = selected_message.content.clone();
