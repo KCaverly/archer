@@ -9,6 +9,10 @@ license = "MIT"
 
 authors = ["KCaverly"]
 
+[lib]
+name = "archer_ai" 
+path = "src/lib.rs"
+
 [dependencies]
 better-panic = "0.3.0"
 clap = { version = "4.4.5", features = ["derive", "cargo", "wrap_help", "unicode", "string", "unstable-styles"] }
