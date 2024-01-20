@@ -1,3 +1,4 @@
+use archer::ai::completion::{CompletionModelID, CompletionProviderID, CompletionStatus};
 use std::fmt;
 use uuid::Uuid;
 
@@ -22,7 +23,12 @@ pub enum Action {
     Refresh,
     Error(String),
     Help,
-    SendMessage(Message),
+    SendMessage(
+        Message,
+        CompletionStatus,
+        CompletionProviderID,
+        CompletionModelID,
+    ),
     ReceiveMessage(Uuid, Message),
     StreamMessage(Uuid, Message),
     SelectNextMessage,

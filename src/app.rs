@@ -1,11 +1,18 @@
 use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
+use archer::ai::{
+    completion::{
+        CompletionModelID, CompletionProviderID, CompletionStatus, Message as CompletionMessage,
+        MessageRole,
+    },
+    providers::COMPLETION_PROVIDERS,
+};
 use std::sync::Arc;
 
 use async_channel::Sender;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
+use futures::{pin_mut, StreamExt};
 use indexmap::IndexMap;
 use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 use replicate_rs::predictions::PredictionStatus;
@@ -157,15 +164,33 @@ User: {}
         self.conversation = convo;
     }
 
-    fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
+    fn send_message(
+        &mut self,
+        message: Message,
+        provider_id: CompletionProviderID,
+        model_id: CompletionModelID,
+        action_tx: Sender<Action>,
+    ) {
         let first_message = self.conversation.messages.len() == 0;
-        let model = message.model;
+        let provider = COMPLETION_PROVIDERS.get_provider(provider_id).unwrap();
+        let model = provider.get_model(model_id);
         let mut messages = self
             .conversation
             .messages
             .values()
-            .map(|x| x.clone())
-            .collect::<Vec<Message>>();
+            .map(|x| {
+                let role = match x.role {
+                    Role::User => MessageRole::User,
+                    Role::System => MessageRole::System,
+                    Role::Assistant => MessageRole::Assistant,
+                };
+
+                CompletionMessage {
+                    role,
+                    content: x.content.clone(),
+                }
+            })
+            .collect::<Vec<CompletionMessage>>();
 
         let input_uuid = self.conversation.generate_message_id();
         let recv_uuid = self.conversation.generate_message_id();
@@ -183,6 +208,18 @@ User: {}
                     .ok();
             }
 
+            let message = {
+                let role = match message.role {
+                    Role::User => MessageRole::User,
+                    Role::System => MessageRole::System,
+                    Role::Assistant => MessageRole::Assistant,
+                };
+
+                CompletionMessage {
+                    role,
+                    content: message.content,
+                }
+            };
             if let Some(model) = model {
                 let mut content_map = IndexMap::<String, String>::new();
                 action_tx
@@ -192,7 +229,7 @@ User: {}
                             role: Role::Assistant,
                             content: "".to_string(),
                             status: Some(PredictionStatus::Starting),
-                            model: Some(model.clone()),
+                            model: None,
                         },
                     ))
                     .await
@@ -200,22 +237,31 @@ User: {}
 
                 messages.push(message);
 
-                let prediction = create_prediction(&model, messages).await;
-                match prediction {
-                    Ok(mut prediction) => 'outer: loop {
-                        prediction.reload().await.ok();
-                        let status = prediction.get_status().await;
+                let completion_result = model.get_completion(messages).await;
+
+                match completion_result {
+                    Ok(mut result) => 'outer: loop {
+                        result.poll().await;
+                        let status = result.get_status().await;
                         match status {
-                            PredictionStatus::Starting => {
+                            CompletionStatus::Starting => {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             }
-                            PredictionStatus::Failed | PredictionStatus::Canceled => {
+                            CompletionStatus::Failed | CompletionStatus::Canceled => {
                                 let content = content_map
                                     .values()
                                     .into_iter()
                                     .map(|x| x.as_str())
                                     .collect::<Vec<&str>>()
                                     .join("");
+
+                                let status = match status {
+                                    CompletionStatus::Failed => PredictionStatus::Failed,
+                                    CompletionStatus::Canceled => PredictionStatus::Canceled,
+                                    _ => {
+                                        todo!()
+                                    }
+                                };
 
                                 action_tx
                                     .send(Action::StreamMessage(
@@ -224,92 +270,79 @@ User: {}
                                             role: Role::Assistant,
                                             content: content.clone(),
                                             status: Some(status),
-                                            model: Some(model.clone()),
+                                            model: None,
                                         },
                                     ))
                                     .await
                                     .ok();
                             }
-                            PredictionStatus::Succeeded | PredictionStatus::Processing => {
-                                let stream = prediction.get_stream().await;
+                            CompletionStatus::Succeeded | CompletionStatus::Processing => {
+                                let stream = result.get_stream().await;
                                 match stream {
                                     Ok(mut stream) => {
-                                        while let Some(event) = stream.next().await {
-                                            match event {
-                                                Ok(event) => {
-                                                    if event.event == "done" {
-                                                        let content = content_map
-                                                            .values()
-                                                            .into_iter()
-                                                            .map(|x| x.as_str())
-                                                            .collect::<Vec<&str>>()
-                                                            .join("");
+                                        while let Some((event, id, data)) = stream.next().await {
+                                            if event == "done" {
+                                                let content = content_map
+                                                    .values()
+                                                    .into_iter()
+                                                    .map(|x| x.as_str())
+                                                    .collect::<Vec<&str>>()
+                                                    .join("");
 
-                                                        action_tx
-                                                            .send(Action::StreamMessage(
-                                                                recv_uuid,
-                                                                Message {
-                                                                    role: Role::Assistant,
-                                                                    content,
-                                                                    status: Some(
-                                                                        PredictionStatus::Succeeded,
-                                                                    ),
-                                                                    model: Some(model.clone()),
-                                                                },
-                                                            ))
-                                                            .await
-                                                            .ok();
+                                                action_tx
+                                                    .send(Action::StreamMessage(
+                                                        recv_uuid,
+                                                        Message {
+                                                            role: Role::Assistant,
+                                                            content,
+                                                            status: Some(
+                                                                PredictionStatus::Succeeded,
+                                                            ),
+                                                            model: None,
+                                                        },
+                                                    ))
+                                                    .await
+                                                    .ok();
 
-                                                        action_tx
-                                                            .send(Action::SaveConversation)
-                                                            .await
-                                                            .ok();
-                                                        break 'outer;
-                                                    }
-
-                                                    content_map.insert(event.id, event.data);
-                                                    let content = content_map
-                                                        .values()
-                                                        .into_iter()
-                                                        .map(|x| x.as_str())
-                                                        .collect::<Vec<&str>>()
-                                                        .join("");
-
-                                                    action_tx
-                                                        .send(Action::StreamMessage(
-                                                            recv_uuid,
-                                                            Message {
-                                                                role: Role::Assistant,
-                                                                content,
-                                                                status: Some(
-                                                                    PredictionStatus::Processing,
-                                                                ),
-                                                                model: Some(model.clone()),
-                                                            },
-                                                        ))
-                                                        .await
-                                                        .ok();
-                                                }
-                                                Err(err) => {
-                                                    action_tx
-                                                        .send(Action::StreamMessage(
-                                                            recv_uuid,
-                                                            Message {
-                                                                role: Role::Assistant,
-                                                                content: err.to_string(),
-                                                                status: Some(
-                                                                    PredictionStatus::Failed,
-                                                                ),
-                                                                model: Some(model.clone()),
-                                                            },
-                                                        ))
-                                                        .await
-                                                        .ok();
-                                                }
+                                                action_tx.send(Action::SaveConversation).await.ok();
+                                                break 'outer;
                                             }
+
+                                            content_map.insert(id, data);
+                                            let content = content_map
+                                                .values()
+                                                .into_iter()
+                                                .map(|x| x.as_str())
+                                                .collect::<Vec<&str>>()
+                                                .join("");
+                                            action_tx
+                                                .send(Action::StreamMessage(
+                                                    recv_uuid,
+                                                    Message {
+                                                        role: Role::Assistant,
+                                                        content,
+                                                        status: Some(PredictionStatus::Processing),
+                                                        model: None,
+                                                    },
+                                                ))
+                                                .await
+                                                .ok();
                                         }
                                     }
-                                    _ => {}
+                                    Err(err) => {
+                                        action_tx
+                                            .send(Action::StreamMessage(
+                                                recv_uuid,
+                                                Message {
+                                                    role: Role::Assistant,
+                                                    content: err.to_string(),
+                                                    status: Some(PredictionStatus::Failed),
+                                                    model: None,
+                                                },
+                                            ))
+                                            .await
+                                            .ok();
+                                    }
                                 }
                             }
                         }
@@ -389,7 +422,9 @@ User: {}
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
                     Action::NewConversation => self.new_conversation(),
-                    Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
+                    Action::SendMessage(message, status, provider_id, model_id) => {
+                        self.send_message(message, provider_id, model_id, action_tx.clone())
+                    }
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
                     Action::SelectNextMessage => self.conversation.select_next_message(),

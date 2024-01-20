@@ -37,7 +37,7 @@ async fn tokio_main() -> Result<()> {
             app.run().await?;
         }
         Err(err) => {
-            eprintln!("{err}");
+            // eprintln!("{err}");
         }
     };
 

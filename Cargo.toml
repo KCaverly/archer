@@ -10,8 +10,12 @@ license = "MIT"
 authors = ["KCaverly"]
 
 [lib]
-name = "archer_ai" 
-path = "src/lib.rs"
+name = "archer" 
+path = "lib.rs"
+
+[[bin]]
+name = "archer"
+path = "src/main.rs"
 
 [dependencies]
 better-panic = "0.3.0"
@@ -56,3 +60,5 @@ dirs = "5.0.1"
 async-trait = "0.1.75"
 regex = "1.10.2"
 cargo-aur = "1.6.0"
+futures-lite = "2.2.0"
+async-stream = "0.3.5"

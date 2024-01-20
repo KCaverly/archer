@@ -1,11 +1,20 @@
-use crate::archer_ai::completion::{
-    CompletionModel, CompletionProvider, CompletionResult, CompletionStatus, Message, MessageRole,
+use crate::ai::completion::{
+    CompletionModel, CompletionModelID, CompletionProvider, CompletionProviderID, CompletionResult,
+    CompletionStatus, Message, MessageRole,
 };
+use async_stream::stream;
 use async_trait::async_trait;
+use bytes::Bytes;
+use eventsource_stream::{EventStream, Eventsource};
+use futures::{pin_mut, Stream, StreamExt};
 use replicate_rs::config::ReplicateConfig;
 use replicate_rs::predictions::{Prediction, PredictionClient, PredictionStatus};
 use serde_json::json;
+use std::default;
 use std::env::var;
+use std::pin::Pin;
+use std::task::Context;
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 #[derive(Default)]
@@ -30,15 +39,28 @@ impl CompletionProvider for Replicate {
     fn list_models(&self) -> Vec<Box<dyn CompletionModel>> {
         todo!();
     }
+
+    fn default_model(&self) -> Box<dyn CompletionModel> {
+        Box::new(ReplicateCompletionModel::default())
+    }
+    fn get_model(&self, model_id: CompletionModelID) -> Option<Box<dyn CompletionModel>> {
+        for model in ReplicateCompletionModel::iter() {
+            if model.get_display_name() == model_id {
+                return Some(Box::new(model));
+            }
+        }
+
+        return None;
+    }
 }
 
-#[derive(Default, EnumIter)]
+#[derive(Default, EnumIter, Clone)]
 enum ReplicateCompletionModel {
-    #[default]
     NousHermes2Yi34b,
     Dolphin2_6Mixtral8x7b,
     Dolphin2_5Mixtral8x7b,
     Yi34bChat,
+    #[default]
     Llama2_13bChat,
     Llama2_70bChat,
     Llama2_7bChat,
@@ -73,9 +95,10 @@ impl ReplicateCompletionModel {
             ReplicateCompletionModel::Llama2_7bChat => {
                 ("meta".to_string(), "llama-2-7b-chat".to_string())
             }
-            ReplicateCompletionModel::Mistral7bInstructV01 => {
-                ("mistralai".to_string(), "mistral-7b-instruct".to_string())
-            }
+            ReplicateCompletionModel::Mistral7bInstructV01 => (
+                "mistralai".to_string(),
+                "mistral-7b-instruct-v0.1".to_string(),
+            ),
             ReplicateCompletionModel::Codellama34bInstruct => {
                 ("meta".to_string(), "codellama-34b-instruct".to_string())
             }
@@ -232,62 +255,69 @@ impl ReplicateCompletionModel {
     }
 }
 
+#[derive(Debug)]
 struct ReplicateCompletionResult {
-    status: CompletionStatus,
-    message: Option<Message>,
     prediction: Prediction,
+    provider_id: CompletionProviderID,
+    model_id: CompletionModelID,
 }
 
 impl ReplicateCompletionResult {
-    fn new(prediction: Prediction) -> Self {
-        let mut result = ReplicateCompletionResult {
-            message: None,
-            status: CompletionStatus::Starting,
+    fn new(prediction: Prediction, model_id: CompletionModelID) -> Self {
+        let result = ReplicateCompletionResult {
             prediction,
+            provider_id: "replicate".to_string(),
+            model_id,
         };
-
-        result.update();
 
         return result;
     }
-
-    fn update(&mut self) {
-        match self.prediction.status {
-            PredictionStatus::Succeeded | PredictionStatus::Processing => {
-                if let Some(output) = self
-                    .prediction
-                    .output
-                    .as_ref()
-                    .map(|x| x.as_array())
-                    .unwrap_or(None)
-                {
-                    self.message = Some(Message {
-                        role: MessageRole::Assistant,
-                        content: output
-                            .iter()
-                            .map(|x| x.as_str().unwrap())
-                            .collect::<String>(),
-                    });
-                } else {
-                    self.status = CompletionStatus::Failed;
-                };
-            }
-            PredictionStatus::Failed => self.status = CompletionStatus::Failed,
-            PredictionStatus::Canceled => self.status = CompletionStatus::Canceled,
-            PredictionStatus::Starting => self.status = CompletionStatus::Starting,
-        }
-    }
 }
 
+#[async_trait]
 impl CompletionResult for ReplicateCompletionResult {
-    fn poll(&self) {
-        todo!();
+    async fn poll(&mut self) {
+        // TODO: There is a risk here for silent errors
+        let _ = self.prediction.reload().await;
     }
-    fn get_status(&self) -> CompletionStatus {
-        todo!();
+    async fn get_status(&mut self) -> CompletionStatus {
+        let status = self.prediction.get_status().await;
+        match status {
+            PredictionStatus::Starting => CompletionStatus::Starting,
+            PredictionStatus::Failed => CompletionStatus::Failed,
+            PredictionStatus::Canceled => CompletionStatus::Canceled,
+            PredictionStatus::Succeeded => CompletionStatus::Succeeded,
+            PredictionStatus::Processing => CompletionStatus::Processing,
+        }
     }
-    fn get_message(&self) -> Option<Message> {
-        todo!();
+
+    async fn get_stream(
+        &mut self,
+    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send>>> {
+        let event_stream = self.prediction.get_stream().await;
+
+        match event_stream {
+            Ok(mut event_stream) => {
+                let stream = stream! {
+                    while let Some(event) = event_stream.next().await {
+                        match event {
+                            Ok(event) => {
+                                yield (event.event, event.id, event.data);
+
+                            }
+                            _ => todo!(),
+                        }
+                    }
+                };
+
+                // pin_mut!(stream);
+
+                let boxed_stream: Pin<Box<dyn Stream<Item = (String, String, String)> + Send>> =
+                    Box::pin(stream);
+                anyhow::Ok(boxed_stream)
+            }
+            Err(err) => panic!("{err}"),
+        }
     }
 }
 
@@ -313,10 +343,13 @@ impl CompletionModel for ReplicateCompletionModel {
                 model_details.0.as_str(),
                 model_details.1.as_str(),
                 inputs,
-                false,
+                true,
             )
             .await?;
 
-        anyhow::Ok(Box::new(ReplicateCompletionResult::new(prediction)))
+        anyhow::Ok(Box::new(ReplicateCompletionResult::new(
+            prediction,
+            self.get_display_name(),
+        )))
     }
 }
