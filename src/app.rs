@@ -1,7 +1,7 @@
 use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use archer::ai::{
     completion::{
-        CompletionModelID, CompletionProviderID, CompletionStatus, Message as CompletionMessage,
+        CompletionModelID, CompletionProviderID, CompletionStatus, Message, MessageMetadata,
         MessageRole,
     },
     providers::COMPLETION_PROVIDERS,
@@ -23,11 +23,7 @@ use uuid::Uuid;
 
 use crate::{
     action::Action,
-    agent::{
-        completion::{create_prediction, get_completion, CompletionModel},
-        conversation::{Conversation, ConversationManager},
-        message::{Message, Role},
-    },
+    agent::conversation::{Conversation, ConversationManager},
     components::{
         conversation_selector::ConversationSelector, input::MessageInput,
         model_selector::ModelSelector, viewer::Viewer, Component,
@@ -129,7 +125,12 @@ impl App {
     }
 
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
-        let title_model = CompletionModel::Mistral7bInstructV01;
+        let title_provider = "replicate".to_string();
+        let title_model = COMPLETION_PROVIDERS
+            .get_provider("replicate".to_string())
+            .unwrap()
+            .default_model();
+
         let system_prompt = "You are a helpful assistant, who title user queries.";
         let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
 
@@ -144,13 +145,34 @@ User: {}
 ", first_message);
 
         let messages = vec![
-            Message::system_message(system_prompt.to_string(), Some(title_model)),
-            Message::user_message(prompt.to_string(), Some(title_model)),
+            Message {
+                role: MessageRole::System,
+                content: system_prompt.to_string(),
+                metadata: MessageMetadata {
+                    provider_id: title_provider.clone(),
+                    model_id: title_model.get_display_name(),
+                    status: CompletionStatus::Succeeded,
+                },
+            },
+            Message {
+                role: MessageRole::User,
+                content: prompt.to_string(),
+                metadata: MessageMetadata {
+                    provider_id: title_provider,
+                    model_id: title_model.get_display_name(),
+                    status: CompletionStatus::Succeeded,
+                },
+            },
         ];
 
         tokio::spawn(async move {
-            if let Some(result) = get_completion(title_model, messages).await.ok() {
-                action_tx.send(Action::SetTitle(result.content)).await.ok();
+            if let Some(Some(result)) = title_model
+                .get_completion(messages)
+                .await
+                .ok()
+                .map(|mut x| x.get_content().ok())
+            {
+                action_tx.send(Action::SetTitle(result)).await.ok();
             }
         });
     }
@@ -164,33 +186,18 @@ User: {}
         self.conversation = convo;
     }
 
-    fn send_message(
-        &mut self,
-        message: Message,
-        provider_id: CompletionProviderID,
-        model_id: CompletionModelID,
-        action_tx: Sender<Action>,
-    ) {
+    fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let first_message = self.conversation.messages.len() == 0;
-        let provider = COMPLETION_PROVIDERS.get_provider(provider_id).unwrap();
-        let model = provider.get_model(model_id);
+        let provider = COMPLETION_PROVIDERS
+            .get_provider(message.clone().metadata.provider_id)
+            .unwrap();
+        let model = provider.get_model(message.clone().metadata.model_id);
         let mut messages = self
             .conversation
             .messages
             .values()
-            .map(|x| {
-                let role = match x.role {
-                    Role::User => MessageRole::User,
-                    Role::System => MessageRole::System,
-                    Role::Assistant => MessageRole::Assistant,
-                };
-
-                CompletionMessage {
-                    role,
-                    content: x.content.clone(),
-                }
-            })
-            .collect::<Vec<CompletionMessage>>();
+            .map(|x| x.clone())
+            .collect::<Vec<Message>>();
 
         let input_uuid = self.conversation.generate_message_id();
         let recv_uuid = self.conversation.generate_message_id();
@@ -208,36 +215,27 @@ User: {}
                     .ok();
             }
 
-            let message = {
-                let role = match message.role {
-                    Role::User => MessageRole::User,
-                    Role::System => MessageRole::System,
-                    Role::Assistant => MessageRole::Assistant,
-                };
-
-                CompletionMessage {
-                    role,
-                    content: message.content,
-                }
-            };
             if let Some(model) = model {
                 let mut content_map = IndexMap::<String, String>::new();
                 action_tx
                     .send(Action::ReceiveMessage(
                         recv_uuid,
                         Message {
-                            role: Role::Assistant,
+                            role: MessageRole::Assistant,
                             content: "".to_string(),
-                            status: Some(PredictionStatus::Starting),
-                            model: None,
+                            metadata: MessageMetadata {
+                                provider_id: message.clone().metadata.provider_id,
+                                model_id: message.clone().metadata.model_id,
+                                status: CompletionStatus::Starting,
+                            },
                         },
                     ))
                     .await
                     .ok();
 
-                messages.push(message);
+                messages.push(message.clone());
 
-                let completion_result = model.get_completion(messages).await;
+                let completion_result = model.start_streaming(messages).await;
 
                 match completion_result {
                     Ok(mut result) => 'outer: loop {
@@ -255,22 +253,13 @@ User: {}
                                     .collect::<Vec<&str>>()
                                     .join("");
 
-                                let status = match status {
-                                    CompletionStatus::Failed => PredictionStatus::Failed,
-                                    CompletionStatus::Canceled => PredictionStatus::Canceled,
-                                    _ => {
-                                        todo!()
-                                    }
-                                };
-
                                 action_tx
                                     .send(Action::StreamMessage(
                                         recv_uuid,
                                         Message {
-                                            role: Role::Assistant,
+                                            role: MessageRole::Assistant,
                                             content: content.clone(),
-                                            status: Some(status),
-                                            model: None,
+                                            metadata: message.clone().metadata,
                                         },
                                     ))
                                     .await
@@ -293,12 +282,19 @@ User: {}
                                                     .send(Action::StreamMessage(
                                                         recv_uuid,
                                                         Message {
-                                                            role: Role::Assistant,
+                                                            role: MessageRole::Assistant,
                                                             content,
-                                                            status: Some(
-                                                                PredictionStatus::Succeeded,
-                                                            ),
-                                                            model: None,
+                                                            metadata: MessageMetadata {
+                                                                provider_id: message
+                                                                    .clone()
+                                                                    .metadata
+                                                                    .provider_id,
+                                                                model_id: message
+                                                                    .clone()
+                                                                    .metadata
+                                                                    .model_id,
+                                                                status: CompletionStatus::Succeeded,
+                                                            },
                                                         },
                                                     ))
                                                     .await
@@ -319,10 +315,19 @@ User: {}
                                                 .send(Action::StreamMessage(
                                                     recv_uuid,
                                                     Message {
-                                                        role: Role::Assistant,
+                                                        role: MessageRole::Assistant,
                                                         content,
-                                                        status: Some(PredictionStatus::Processing),
-                                                        model: None,
+                                                        metadata: MessageMetadata {
+                                                            provider_id: message
+                                                                .clone()
+                                                                .metadata
+                                                                .provider_id,
+                                                            model_id: message
+                                                                .clone()
+                                                                .metadata
+                                                                .model_id,
+                                                            status: CompletionStatus::Processing,
+                                                        },
                                                     },
                                                 ))
                                                 .await
@@ -334,10 +339,9 @@ User: {}
                                             .send(Action::StreamMessage(
                                                 recv_uuid,
                                                 Message {
-                                                    role: Role::Assistant,
+                                                    role: MessageRole::Assistant,
                                                     content: err.to_string(),
-                                                    status: Some(PredictionStatus::Failed),
-                                                    model: None,
+                                                    metadata: message.clone().metadata,
                                                 },
                                             ))
                                             .await
@@ -422,9 +426,7 @@ User: {}
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
                     Action::NewConversation => self.new_conversation(),
-                    Action::SendMessage(message, status, provider_id, model_id) => {
-                        self.send_message(message, provider_id, model_id, action_tx.clone())
-                    }
+                    Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
                     Action::SelectNextMessage => self.conversation.select_next_message(),

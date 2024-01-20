@@ -16,9 +16,7 @@ use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
 
 use super::Component;
-use crate::agent::completion::CompletionModel;
 use crate::agent::conversation::{Conversation, ConversationManager, CONVERSATION_DIR};
-use crate::agent::message::{Message, Role};
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };

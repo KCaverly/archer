@@ -10,13 +10,12 @@ use tui_textarea::{Input, Key, TextArea};
 use super::Component;
 // use crate::agent::completion::CompletionModel;
 use crate::agent::conversation::{Conversation, ConversationManager};
-use crate::agent::message::{Message, Role};
 use crate::config::{Config, KeyBindings};
 use crate::mode::Mode;
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
-use archer::ai::completion::Message as CompletionMessage;
-use archer::ai::completion::{CompletionModel, CompletionStatus};
+use archer::ai::completion::{CompletionModel, CompletionStatus, MessageMetadata};
+use archer::ai::completion::{Message, MessageRole};
 use archer::ai::providers::COMPLETION_PROVIDERS;
 
 use async_channel::Sender;
@@ -76,17 +75,15 @@ impl Component for MessageInput<'static> {
                 KeyCode::Enter => {
                     let content = self.textarea.lines().join("\n");
                     if content.len() > 0 {
-                        let action = Action::SendMessage(
-                            Message {
-                                role: Role::User,
-                                content,
-                                status: None,
-                                model: None,
+                        let action = Action::SendMessage(Message {
+                            role: MessageRole::User,
+                            content,
+                            metadata: MessageMetadata {
+                                provider_id: "replicate".to_string(),
+                                model_id: self.active_model.get_display_name(),
+                                status: CompletionStatus::Succeeded,
                             },
-                            CompletionStatus::Starting,
-                            "replicate".to_string(),
-                            self.active_model.get_display_name(),
-                        );
+                        });
                         self.textarea = TextArea::default();
                         return Ok(Some(action));
                     }
@@ -129,9 +126,12 @@ impl Component for MessageInput<'static> {
                     self.state = InputState::Active;
                 }
             },
-            Action::SwitchModel(model) => {
-                todo!();
-                // self.active_model = model;
+            Action::SwitchModel(provider_id, model_id) => {
+                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(provider_id) {
+                    if let Some(model) = provider.get_model(model_id) {
+                        self.active_model = model;
+                    }
+                }
             }
 
             _ => {}

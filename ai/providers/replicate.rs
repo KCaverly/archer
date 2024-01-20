@@ -2,6 +2,7 @@ use crate::ai::completion::{
     CompletionModel, CompletionModelID, CompletionProvider, CompletionProviderID, CompletionResult,
     CompletionStatus, Message, MessageRole,
 };
+use anyhow::anyhow;
 use async_stream::stream;
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -37,7 +38,13 @@ impl CompletionProvider for Replicate {
     }
 
     fn list_models(&self) -> Vec<Box<dyn CompletionModel>> {
-        todo!();
+        let mut models = Vec::<Box<dyn CompletionModel>>::new();
+        for model in ReplicateCompletionModel::iter() {
+            let boxed_model = Box::new(model);
+            models.push(boxed_model)
+        }
+
+        models
     }
 
     fn default_model(&self) -> Box<dyn CompletionModel> {
@@ -291,6 +298,20 @@ impl CompletionResult for ReplicateCompletionResult {
         }
     }
 
+    fn get_content(&mut self) -> anyhow::Result<String> {
+        if let Some(output) = self.prediction.output.clone() {
+            let content = output
+                .as_array()
+                .ok_or(anyhow!("output is unexpected"))?
+                .iter()
+                .map(|x| x.as_str().unwrap())
+                .collect::<String>();
+            anyhow::Ok(content)
+        } else {
+            Err(anyhow!("output is invalid"))
+        }
+    }
+
     async fn get_stream(
         &mut self,
     ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send>>> {
@@ -329,6 +350,47 @@ impl CompletionModel for ReplicateCompletionModel {
     }
 
     async fn get_completion(
+        &self,
+        messages: Vec<Message>,
+    ) -> anyhow::Result<Box<dyn CompletionResult>> {
+        let inputs = self.get_inputs(&messages);
+        let model_details = self.get_model_details();
+
+        let config = ReplicateConfig::new()?;
+        let client = PredictionClient::from(config);
+
+        let mut prediction = client
+            .create(
+                model_details.0.as_str(),
+                model_details.1.as_str(),
+                inputs,
+                false,
+            )
+            .await?;
+
+        fn is_completed(status: &PredictionStatus) -> bool {
+            match status {
+                PredictionStatus::Failed
+                | PredictionStatus::Succeeded
+                | PredictionStatus::Canceled => true,
+                _ => false,
+            }
+        }
+
+        while !is_completed(&prediction.status) {
+            // TODO: This error has to be accomodated for
+            let _ = prediction.reload().await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
+        }
+
+        anyhow::Ok(Box::new(ReplicateCompletionResult {
+            prediction,
+            provider_id: "replicate".to_string(),
+            model_id: self.get_display_name(),
+        }))
+    }
+
+    async fn start_streaming(
         &self,
         messages: Vec<Message>,
     ) -> anyhow::Result<Box<dyn CompletionResult>> {

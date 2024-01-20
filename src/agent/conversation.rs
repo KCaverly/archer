@@ -2,8 +2,8 @@ use dirs::home_dir;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use super::message::Message;
 use anyhow::anyhow;
+use archer::ai::completion::Message;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
