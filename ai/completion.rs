@@ -29,6 +29,11 @@ pub struct MessageMetadata {
     pub status: CompletionStatus,
 }
 
+pub struct ModelID {
+    provider_id: String,
+    model_id: String,
+}
+
 pub type CompletionModelID = String;
 pub type CompletionProviderID = String;
 

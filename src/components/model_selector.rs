@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use archer::ai::completion::CompletionModel;
+use archer::ai::config::ARCHER_CONFIG;
 use archer::ai::providers::{COMPLETION_PROVIDERS, DEFAULT_COMPLETION_PROVIDER};
 use color_eyre::eyre::Result;
 use futures::StreamExt;
@@ -16,6 +17,7 @@ use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
 
 use super::Component;
+use crate::mode::Mode;
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };
@@ -106,6 +108,10 @@ impl Component for ModelSelector {
                 tokio::spawn(async move {
                     action_tx
                         .send(Action::SwitchModel(selected_provider, selected_model))
+                        .await
+                        .ok();
+                    action_tx
+                        .send(Action::SwitchMode(Mode::ActiveInput))
                         .await
                         .ok();
                 });

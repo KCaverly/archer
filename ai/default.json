@@ -1,0 +1,29 @@
+{
+  "default_completion_model": {
+    "provider_id": "TogetherAI",
+    "model_id": "DiscoResearch/DiscoLM-mixtral-8x7b-v2",
+    "template": "ChatML"
+  },
+  "models": [
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "DiscoResearch/DiscoLM-mixtral-8x7b-v2",
+      "template": "ChatML"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "kcaverly/dolphin-2.5-mixtral-8x7b-gguf",
+      "template": "ChatML"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "kcaverly/dolphin-2.6-mixtral-8x7b-gguf",
+      "template": "ChatML"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "kcaverly/dolphin-2.6-mixtral-8x7b-gguf",
+      "template": "ChatML"
+    }
+  ]
+}
