@@ -3,7 +3,6 @@
 #![allow(unused_variables)]
 
 pub mod action;
-pub mod agent;
 pub mod app;
 pub mod cli;
 pub mod components;

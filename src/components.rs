@@ -5,10 +5,10 @@ use ratatui::layout::Rect;
 
 use crate::{
     action::Action,
-    agent::conversation::{Conversation, ConversationManager},
     config::Config,
     tui::{Event, Frame},
 };
+use archer::ai::conversation::{Conversation, ConversationManager};
 
 pub mod conversation_selector;
 pub mod input;

@@ -23,7 +23,6 @@ use uuid::Uuid;
 
 use crate::{
     action::Action,
-    agent::conversation::{Conversation, ConversationManager},
     components::{
         conversation_selector::ConversationSelector, input::MessageInput,
         model_selector::ModelSelector, viewer::Viewer, Component,
@@ -32,6 +31,7 @@ use crate::{
     mode::Mode,
     tui::{self, Frame, Tui},
 };
+use archer::ai::conversation::{Conversation, ConversationManager};
 
 #[derive(PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum AppPanel {

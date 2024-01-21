@@ -16,12 +16,12 @@ use ratatui::{prelude::*, widgets::*};
 use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
-use crate::agent::conversation::{Conversation, ConversationManager};
 use crate::mode::Mode;
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };
 use crate::{action::Action, tui::Frame};
+use archer::ai::conversation::{Conversation, ConversationManager};
 use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};

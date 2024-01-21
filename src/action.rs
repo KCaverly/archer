@@ -8,7 +8,8 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::{agent::conversation::Conversation, mode::Mode};
+use crate::mode::Mode;
+use archer::ai::conversation::Conversation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {

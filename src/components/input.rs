@@ -8,14 +8,13 @@ use tokio::sync::mpsc::UnboundedSender;
 use tui_textarea::{Input, Key, TextArea};
 
 use super::Component;
-// use crate::agent::completion::CompletionModel;
-use crate::agent::conversation::{Conversation, ConversationManager};
 use crate::config::{Config, KeyBindings};
 use crate::mode::Mode;
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
 use archer::ai::completion::{CompletionModel, CompletionStatus, MessageMetadata};
 use archer::ai::completion::{Message, MessageRole};
+use archer::ai::conversation::{Conversation, ConversationManager};
 use archer::ai::providers::COMPLETION_PROVIDERS;
 
 use async_channel::Sender;

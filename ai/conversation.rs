@@ -2,8 +2,8 @@ use dirs::home_dir;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use crate::ai::completion::Message;
 use anyhow::anyhow;
-use archer::ai::completion::Message;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs::File;
@@ -11,7 +11,7 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-pub(crate) const CONVERSATION_DIR: &str = ".archer/conversations/";
+pub const CONVERSATION_DIR: &str = ".archer/conversations/";
 
 fn get_conversation_dir() -> PathBuf {
     if let Some(conversation_dir) = home_dir().and_then(|x| Some(x.join(CONVERSATION_DIR))) {
@@ -70,7 +70,7 @@ impl Default for ConversationManager {
 }
 
 impl ConversationManager {
-    pub(crate) fn load_conversation(&mut self, id: &Uuid) -> anyhow::Result<Conversation> {
+    pub fn load_conversation(&mut self, id: &Uuid) -> anyhow::Result<Conversation> {
         let file_path = self.get_file_path(id);
         let contents = std::fs::read_to_string(file_path.as_path())?;
         let convo: Conversation = serde_json::from_str(contents.as_str())?;
@@ -78,7 +78,7 @@ impl ConversationManager {
         anyhow::Ok(convo)
     }
 
-    pub(crate) fn new_conversation(&mut self) -> Conversation {
+    pub fn new_conversation(&mut self) -> Conversation {
         let id = Uuid::now_v7();
         let convo = Conversation::new();
 
@@ -92,7 +92,7 @@ impl ConversationManager {
         convo
     }
 
-    pub(crate) fn add_conversation(&mut self, conversation: Conversation) {
+    pub fn add_conversation(&mut self, conversation: Conversation) {
         let metadata = ConversationMetadata {
             path: conversation.get_file_path(),
             title: conversation.title.unwrap_or(conversation.id.to_string()),
@@ -100,14 +100,14 @@ impl ConversationManager {
         self.conversation_files.insert(conversation.id, metadata);
     }
 
-    pub(crate) fn get_file_path(&self, id: &Uuid) -> PathBuf {
+    pub fn get_file_path(&self, id: &Uuid) -> PathBuf {
         let conversation_dir = get_conversation_dir();
         let directory = PathBuf::from(conversation_dir);
         let file_path = directory.join(format!("{}.json", id));
         file_path
     }
 
-    pub(crate) fn load_selected_conversation(&mut self) -> anyhow::Result<Conversation> {
+    pub fn load_selected_conversation(&mut self) -> anyhow::Result<Conversation> {
         let ids = self
             .conversation_files
             .keys()
@@ -123,7 +123,7 @@ impl ConversationManager {
         }
     }
 
-    pub(crate) fn set_active_conversation(&mut self, conversation: &Conversation) {
+    pub fn set_active_conversation(&mut self, conversation: &Conversation) {
         self.active_conversation = self
             .conversation_files
             .keys()
@@ -132,7 +132,7 @@ impl ConversationManager {
             .unwrap();
     }
 
-    pub(crate) fn get_selected_uuid(&mut self) -> anyhow::Result<Uuid> {
+    pub fn get_selected_uuid(&mut self) -> anyhow::Result<Uuid> {
         let ids = self
             .conversation_files
             .keys()
@@ -146,21 +146,21 @@ impl ConversationManager {
         }
     }
 
-    pub(crate) fn remove_conversation(&mut self, id: &Uuid) {
+    pub fn remove_conversation(&mut self, id: &Uuid) {
         self.conversation_files.shift_remove(id);
     }
 
-    pub(crate) fn activate_selected_conversation(&mut self) {
+    pub fn activate_selected_conversation(&mut self) {
         self.active_conversation = self.selected_conversation;
     }
 
-    pub(crate) fn select_next_conversation(&mut self) {
+    pub fn select_next_conversation(&mut self) {
         if self.selected_conversation < (self.conversation_files.len() - 1) {
             self.selected_conversation += 1;
         }
     }
 
-    pub(crate) fn list_conversations(&self) -> Vec<String> {
+    pub fn list_conversations(&self) -> Vec<String> {
         self.conversation_files
             .keys()
             .into_iter()
@@ -168,7 +168,7 @@ impl ConversationManager {
             .collect::<Vec<String>>()
     }
 
-    pub(crate) fn list_titles(&self) -> Vec<String> {
+    pub fn list_titles(&self) -> Vec<String> {
         self.conversation_files
             .values()
             .into_iter()
@@ -176,13 +176,13 @@ impl ConversationManager {
             .collect::<Vec<String>>()
     }
 
-    pub(crate) fn select_prev_conversation(&mut self) {
+    pub fn select_prev_conversation(&mut self) {
         if self.selected_conversation > 0 {
             self.selected_conversation -= 1;
         }
     }
 
-    pub(crate) fn update_conversation(&mut self, conversation: Conversation) {
+    pub fn update_conversation(&mut self, conversation: Conversation) {
         let metadata = ConversationMetadata {
             path: conversation.get_file_path(),
             title: conversation.title.unwrap_or(conversation.id.to_string()),
@@ -227,7 +227,7 @@ impl Conversation {
         self.select_last_message();
     }
 
-    pub(crate) fn save(&self) -> anyhow::Result<()> {
+    pub fn save(&self) -> anyhow::Result<()> {
         let conversation_dir = get_conversation_dir();
         let data = serde_json::to_string(self)?;
         let file_path = self.get_file_path();
