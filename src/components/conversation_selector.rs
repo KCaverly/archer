@@ -37,17 +37,17 @@ pub struct ConversationSelector {
 }
 
 impl Component for ConversationSelector {
-    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> anyhow::Result<()> {
         self.command_tx = Some(tx);
         Ok(())
     }
 
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    fn register_config_handler(&mut self, config: Config) -> anyhow::Result<()> {
         self.config = config;
         Ok(())
     }
 
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    fn update(&mut self, action: Action) -> anyhow::Result<Option<Action>> {
         match action {
             _ => {}
         }

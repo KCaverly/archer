@@ -58,17 +58,20 @@ impl MessageInput<'static> {
 }
 
 impl Component for MessageInput<'static> {
-    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> anyhow::Result<()> {
         self.command_tx = Some(tx);
         Ok(())
     }
 
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    fn register_config_handler(&mut self, config: Config) -> anyhow::Result<()> {
         self.config = config;
         Ok(())
     }
 
-    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
+    fn handle_key_events(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> anyhow::Result<Option<Action>> {
         if self.state == InputState::Active {
             match key.code {
                 KeyCode::Enter => {
@@ -109,7 +112,7 @@ impl Component for MessageInput<'static> {
         Ok(None)
     }
 
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    fn update(&mut self, action: Action) -> anyhow::Result<Option<Action>> {
         match action {
             Action::SwitchKeymap(keymap) => {
                 self.keymap = keymap;
@@ -126,7 +129,7 @@ impl Component for MessageInput<'static> {
                 }
             },
             Action::SwitchModel(provider_id, model_id) => {
-                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(provider_id) {
+                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&provider_id) {
                     if let Some(model) = provider.get_model(model_id) {
                         self.active_model = model;
                     }

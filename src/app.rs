@@ -57,7 +57,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64) -> anyhow::Result<Self> {
         let conversation = Conversation::new();
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
@@ -127,7 +127,7 @@ impl App {
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
         let title_provider = "replicate".to_string();
         let title_model = COMPLETION_PROVIDERS
-            .get_provider("replicate".to_string())
+            .get_provider(&"replicate".to_string())
             .unwrap()
             .default_model();
 
@@ -189,7 +189,7 @@ User: {}
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let first_message = self.conversation.messages.len() == 0;
         let provider = COMPLETION_PROVIDERS
-            .get_provider(message.clone().metadata.provider_id)
+            .get_provider(&message.clone().metadata.provider_id)
             .unwrap();
         let model = provider.get_model(message.clone().metadata.model_id);
         let mut messages = self
@@ -359,7 +359,7 @@ User: {}
         });
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> anyhow::Result<()> {
         let (action_tx, action_rx) = async_channel::unbounded();
 
         let mut tui = tui::Tui::new()?

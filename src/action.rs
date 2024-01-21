@@ -48,6 +48,7 @@ pub enum Action {
     UpdateTitle(String),
     ScrollUp,
     ScrollDown,
+    NextProvider,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -91,6 +92,7 @@ impl<'de> Deserialize<'de> for Action {
                     "NewConversation" => Ok(Action::NewConversation),
                     "ScrollUp" => Ok(Action::ScrollUp),
                     "ScrollDown" => Ok(Action::ScrollDown),
+                    "NextProvider" => Ok(Action::NextProvider),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {

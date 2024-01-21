@@ -29,7 +29,7 @@ fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from("com", "kdheepak", env!("CARGO_PKG_NAME"))
 }
 
-pub fn initialize_panic_handler() -> Result<()> {
+pub fn initialize_panic_handler() -> anyhow::Result<()> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
         .panic_section(format!(
             "This is a bug. Consider reporting it at {}",
@@ -103,7 +103,7 @@ pub fn get_config_dir() -> PathBuf {
     directory
 }
 
-pub fn initialize_logging() -> Result<()> {
+pub fn initialize_logging() -> anyhow::Result<()> {
     let directory = get_data_dir();
     std::fs::create_dir_all(directory.clone())?;
     let log_path = directory.join(LOG_FILE.clone());

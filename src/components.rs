@@ -29,7 +29,7 @@ pub trait Component {
     ///
     /// * `Result<()>` - An Ok result or an error.
     #[allow(unused_variables)]
-    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> anyhow::Result<()> {
         Ok(())
     }
     /// Register a configuration handler that provides configuration settings if necessary.
@@ -42,7 +42,7 @@ pub trait Component {
     ///
     /// * `Result<()>` - An Ok result or an error.
     #[allow(unused_variables)]
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    fn register_config_handler(&mut self, config: Config) -> anyhow::Result<()> {
         Ok(())
     }
     /// Initialize the component with a specified area if necessary.
@@ -54,7 +54,7 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<()>` - An Ok result or an error.
-    fn init(&mut self, area: Rect) -> Result<()> {
+    fn init(&mut self, area: Rect) -> anyhow::Result<()> {
         Ok(())
     }
     /// Handle incoming events and produce actions if necessary.
@@ -66,7 +66,7 @@ pub trait Component {
     /// # Returns
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn handle_events(&mut self, event: Option<Event>) -> Result<Option<Action>> {
+    fn handle_events(&mut self, event: Option<Event>) -> anyhow::Result<Option<Action>> {
         let r = match event {
             Some(Event::Key(key_event)) => self.handle_key_events(key_event)?,
             Some(Event::Mouse(mouse_event)) => self.handle_mouse_events(mouse_event)?,
@@ -84,7 +84,7 @@ pub trait Component {
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
     #[allow(unused_variables)]
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Option<Action>> {
+    fn handle_key_events(&mut self, key: KeyEvent) -> anyhow::Result<Option<Action>> {
         Ok(None)
     }
     /// Handle mouse events and produce actions if necessary.
@@ -97,7 +97,7 @@ pub trait Component {
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
     #[allow(unused_variables)]
-    fn handle_mouse_events(&mut self, mouse: MouseEvent) -> Result<Option<Action>> {
+    fn handle_mouse_events(&mut self, mouse: MouseEvent) -> anyhow::Result<Option<Action>> {
         Ok(None)
     }
     /// Update the state of the component based on a received action. (REQUIRED)
@@ -110,7 +110,7 @@ pub trait Component {
     ///
     /// * `Result<Option<Action>>` - An action to be processed or none.
     #[allow(unused_variables)]
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    fn update(&mut self, action: Action) -> anyhow::Result<Option<Action>> {
         Ok(None)
     }
     /// Render the component on the screen. (REQUIRED)
