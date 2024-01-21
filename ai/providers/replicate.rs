@@ -115,7 +115,7 @@ impl ReplicateCompletionModel {
             }
             ReplicateCompletionModel::DeepseekCoder6_7bInstruct => (
                 "kcaverly".to_string(),
-                "deepseek-code-6.7b-instruct".to_string(),
+                "deepseek-coder-6.7b-instruct".to_string(),
             ),
             ReplicateCompletionModel::DeepseekCoder33bInstructGGUF => (
                 "kcaverly".to_string(),
