@@ -59,6 +59,10 @@ impl CompletionProvider for Replicate {
 
         return None;
     }
+
+    fn get_id(&self) -> String {
+        "Replicate".to_string()
+    }
 }
 
 #[derive(Default, EnumIter, Clone)]
@@ -312,9 +316,10 @@ impl CompletionResult for ReplicateCompletionResult {
         }
     }
 
-    async fn get_stream(
-        &mut self,
-    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send>>> {
+    async fn get_stream<'a>(
+        &'a mut self,
+    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send + Sync + 'a>>>
+    {
         let event_stream = self.prediction.get_stream().await;
 
         match event_stream {
@@ -333,8 +338,9 @@ impl CompletionResult for ReplicateCompletionResult {
 
                 // pin_mut!(stream);
 
-                let boxed_stream: Pin<Box<dyn Stream<Item = (String, String, String)> + Send>> =
-                    Box::pin(stream);
+                let boxed_stream: Pin<
+                    Box<dyn Stream<Item = (String, String, String)> + Send + Sync>,
+                > = Box::pin(stream);
                 anyhow::Ok(boxed_stream)
             }
             Err(err) => panic!("{err}"),

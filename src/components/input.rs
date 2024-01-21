@@ -32,6 +32,7 @@ pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
     state: InputState,
+    provider_id: String,
     active_model: Box<dyn CompletionModel>,
     keymap: String,
     textarea: TextArea<'a>,
@@ -46,11 +47,13 @@ impl MessageInput<'static> {
         };
         let default_provider = COMPLETION_PROVIDERS.default_provider().unwrap();
         let default_model = default_provider.default_model();
+
         Self {
             command_tx: None,
             config: Config::default(),
             state,
             keymap,
+            provider_id: default_provider.get_id(),
             active_model: default_model,
             textarea: TextArea::default(),
         }
@@ -81,7 +84,7 @@ impl Component for MessageInput<'static> {
                             role: MessageRole::User,
                             content,
                             metadata: MessageMetadata {
-                                provider_id: "replicate".to_string(),
+                                provider_id: self.provider_id.clone(),
                                 model_id: self.active_model.get_display_name(),
                                 status: CompletionStatus::Succeeded,
                             },
@@ -132,6 +135,7 @@ impl Component for MessageInput<'static> {
                 if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&provider_id) {
                     if let Some(model) = provider.get_model(model_id) {
                         self.active_model = model;
+                        self.provider_id = provider_id;
                     }
                 }
             }

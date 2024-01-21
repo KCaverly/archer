@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use archer::ai::completion::CompletionModel;
-use archer::ai::providers::COMPLETION_PROVIDERS;
+use archer::ai::providers::{COMPLETION_PROVIDERS, DEFAULT_COMPLETION_PROVIDER};
 use color_eyre::eyre::Result;
 use futures::StreamExt;
 use ratatui::{prelude::*, widgets::*};
@@ -37,17 +37,16 @@ pub struct ModelSelector {
 
 impl ModelSelector {
     pub fn new() -> Self {
-        let selected_provider = "replicate".to_string();
         let provider = COMPLETION_PROVIDERS
-            .get_provider(&"replicate".to_string())
+            .get_provider(&DEFAULT_COMPLETION_PROVIDER.to_string())
             .unwrap();
         let mut selected_model = HashMap::<CompletionProviderID, usize>::new();
-        selected_model.insert("replicate".to_string(), 0);
+        selected_model.insert(DEFAULT_COMPLETION_PROVIDER.to_string(), 0);
         let models = provider.list_models();
         Self {
             selected_model,
             models,
-            selected_provider,
+            selected_provider: DEFAULT_COMPLETION_PROVIDER.to_string(),
             ..Default::default()
         }
     }

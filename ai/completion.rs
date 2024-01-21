@@ -53,15 +53,16 @@ pub trait CompletionProvider: Sync {
     fn list_models(&self) -> Vec<Box<dyn CompletionModel>>;
     fn default_model(&self) -> Box<dyn CompletionModel>;
     fn get_model(&self, model_id: CompletionModelID) -> Option<Box<dyn CompletionModel>>;
+    fn get_id(&self) -> String;
 }
 
 #[async_trait]
 pub trait CompletionResult: Send + Sync {
     async fn poll(&mut self);
     async fn get_status(&mut self) -> CompletionStatus;
-    async fn get_stream(
-        &mut self,
-    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send>>>;
+    async fn get_stream<'a>(
+        &'a mut self,
+    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send + Sync + 'a>>>;
     fn get_content(&mut self) -> anyhow::Result<String>;
 }
 

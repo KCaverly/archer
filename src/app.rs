@@ -125,9 +125,9 @@ impl App {
     }
 
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
-        let title_provider = "replicate".to_string();
+        let title_provider = "Replicate".to_string();
         let title_model = COMPLETION_PROVIDERS
-            .get_provider(&"replicate".to_string())
+            .get_provider(&"Replicate".to_string())
             .unwrap()
             .default_model();
 
@@ -355,6 +355,7 @@ User: {}
                         todo!();
                     }
                 }
+            } else {
             }
         });
     }
