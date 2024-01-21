@@ -1,11 +1,18 @@
 use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
+use archer::ai::{
+    completion::{
+        CompletionModelID, CompletionProviderID, CompletionStatus, Message, MessageMetadata,
+        MessageRole,
+    },
+    providers::COMPLETION_PROVIDERS,
+};
 use std::sync::Arc;
 
 use async_channel::Sender;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
+use futures::{pin_mut, StreamExt};
 use indexmap::IndexMap;
 use ratatui::prelude::{Constraint, Direction, Layout, Rect};
 use replicate_rs::predictions::PredictionStatus;
@@ -16,11 +23,6 @@ use uuid::Uuid;
 
 use crate::{
     action::Action,
-    agent::{
-        completion::{create_prediction, get_completion, CompletionModel},
-        conversation::{Conversation, ConversationManager},
-        message::{Message, Role},
-    },
     components::{
         conversation_selector::ConversationSelector, input::MessageInput,
         model_selector::ModelSelector, viewer::Viewer, Component,
@@ -29,6 +31,7 @@ use crate::{
     mode::Mode,
     tui::{self, Frame, Tui},
 };
+use archer::ai::conversation::{Conversation, ConversationManager};
 
 #[derive(PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub enum AppPanel {
@@ -122,7 +125,12 @@ impl App {
     }
 
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
-        let title_model = CompletionModel::Mistral7bInstructV01;
+        let title_provider = "replicate".to_string();
+        let title_model = COMPLETION_PROVIDERS
+            .get_provider("replicate".to_string())
+            .unwrap()
+            .default_model();
+
         let system_prompt = "You are a helpful assistant, who title user queries.";
         let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
 
@@ -137,13 +145,34 @@ User: {}
 ", first_message);
 
         let messages = vec![
-            Message::system_message(system_prompt.to_string(), Some(title_model)),
-            Message::user_message(prompt.to_string(), Some(title_model)),
+            Message {
+                role: MessageRole::System,
+                content: system_prompt.to_string(),
+                metadata: MessageMetadata {
+                    provider_id: title_provider.clone(),
+                    model_id: title_model.get_display_name(),
+                    status: CompletionStatus::Succeeded,
+                },
+            },
+            Message {
+                role: MessageRole::User,
+                content: prompt.to_string(),
+                metadata: MessageMetadata {
+                    provider_id: title_provider,
+                    model_id: title_model.get_display_name(),
+                    status: CompletionStatus::Succeeded,
+                },
+            },
         ];
 
         tokio::spawn(async move {
-            if let Some(result) = get_completion(title_model, messages).await.ok() {
-                action_tx.send(Action::SetTitle(result.content)).await.ok();
+            if let Some(Some(result)) = title_model
+                .get_completion(messages)
+                .await
+                .ok()
+                .map(|mut x| x.get_content().ok())
+            {
+                action_tx.send(Action::SetTitle(result)).await.ok();
             }
         });
     }
@@ -159,7 +188,10 @@ User: {}
 
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let first_message = self.conversation.messages.len() == 0;
-        let model = message.model;
+        let provider = COMPLETION_PROVIDERS
+            .get_provider(message.clone().metadata.provider_id)
+            .unwrap();
+        let model = provider.get_model(message.clone().metadata.model_id);
         let mut messages = self
             .conversation
             .messages
@@ -189,27 +221,31 @@ User: {}
                     .send(Action::ReceiveMessage(
                         recv_uuid,
                         Message {
-                            role: Role::Assistant,
+                            role: MessageRole::Assistant,
                             content: "".to_string(),
-                            status: Some(PredictionStatus::Starting),
-                            model: Some(model.clone()),
+                            metadata: MessageMetadata {
+                                provider_id: message.clone().metadata.provider_id,
+                                model_id: message.clone().metadata.model_id,
+                                status: CompletionStatus::Starting,
+                            },
                         },
                     ))
                     .await
                     .ok();
 
-                messages.push(message);
+                messages.push(message.clone());
 
-                let prediction = create_prediction(&model, messages).await;
-                match prediction {
-                    Ok(mut prediction) => 'outer: loop {
-                        prediction.reload().await.ok();
-                        let status = prediction.get_status().await;
+                let completion_result = model.start_streaming(messages).await;
+
+                match completion_result {
+                    Ok(mut result) => 'outer: loop {
+                        result.poll().await;
+                        let status = result.get_status().await;
                         match status {
-                            PredictionStatus::Starting => {
+                            CompletionStatus::Starting => {
                                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             }
-                            PredictionStatus::Failed | PredictionStatus::Canceled => {
+                            CompletionStatus::Failed | CompletionStatus::Canceled => {
                                 let content = content_map
                                     .values()
                                     .into_iter()
@@ -221,95 +257,96 @@ User: {}
                                     .send(Action::StreamMessage(
                                         recv_uuid,
                                         Message {
-                                            role: Role::Assistant,
+                                            role: MessageRole::Assistant,
                                             content: content.clone(),
-                                            status: Some(status),
-                                            model: Some(model.clone()),
+                                            metadata: message.clone().metadata,
                                         },
                                     ))
                                     .await
                                     .ok();
                             }
-                            PredictionStatus::Succeeded | PredictionStatus::Processing => {
-                                let stream = prediction.get_stream().await;
+                            CompletionStatus::Succeeded | CompletionStatus::Processing => {
+                                let stream = result.get_stream().await;
                                 match stream {
                                     Ok(mut stream) => {
-                                        while let Some(event) = stream.next().await {
-                                            match event {
-                                                Ok(event) => {
-                                                    if event.event == "done" {
-                                                        let content = content_map
-                                                            .values()
-                                                            .into_iter()
-                                                            .map(|x| x.as_str())
-                                                            .collect::<Vec<&str>>()
-                                                            .join("");
+                                        while let Some((event, id, data)) = stream.next().await {
+                                            if event == "done" {
+                                                let content = content_map
+                                                    .values()
+                                                    .into_iter()
+                                                    .map(|x| x.as_str())
+                                                    .collect::<Vec<&str>>()
+                                                    .join("");
 
-                                                        action_tx
-                                                            .send(Action::StreamMessage(
-                                                                recv_uuid,
-                                                                Message {
-                                                                    role: Role::Assistant,
-                                                                    content,
-                                                                    status: Some(
-                                                                        PredictionStatus::Succeeded,
-                                                                    ),
-                                                                    model: Some(model.clone()),
-                                                                },
-                                                            ))
-                                                            .await
-                                                            .ok();
-
-                                                        action_tx
-                                                            .send(Action::SaveConversation)
-                                                            .await
-                                                            .ok();
-                                                        break 'outer;
-                                                    }
-
-                                                    content_map.insert(event.id, event.data);
-                                                    let content = content_map
-                                                        .values()
-                                                        .into_iter()
-                                                        .map(|x| x.as_str())
-                                                        .collect::<Vec<&str>>()
-                                                        .join("");
-
-                                                    action_tx
-                                                        .send(Action::StreamMessage(
-                                                            recv_uuid,
-                                                            Message {
-                                                                role: Role::Assistant,
-                                                                content,
-                                                                status: Some(
-                                                                    PredictionStatus::Processing,
-                                                                ),
-                                                                model: Some(model.clone()),
+                                                action_tx
+                                                    .send(Action::StreamMessage(
+                                                        recv_uuid,
+                                                        Message {
+                                                            role: MessageRole::Assistant,
+                                                            content,
+                                                            metadata: MessageMetadata {
+                                                                provider_id: message
+                                                                    .clone()
+                                                                    .metadata
+                                                                    .provider_id,
+                                                                model_id: message
+                                                                    .clone()
+                                                                    .metadata
+                                                                    .model_id,
+                                                                status: CompletionStatus::Succeeded,
                                                             },
-                                                        ))
-                                                        .await
-                                                        .ok();
-                                                }
-                                                Err(err) => {
-                                                    action_tx
-                                                        .send(Action::StreamMessage(
-                                                            recv_uuid,
-                                                            Message {
-                                                                role: Role::Assistant,
-                                                                content: err.to_string(),
-                                                                status: Some(
-                                                                    PredictionStatus::Failed,
-                                                                ),
-                                                                model: Some(model.clone()),
-                                                            },
-                                                        ))
-                                                        .await
-                                                        .ok();
-                                                }
+                                                        },
+                                                    ))
+                                                    .await
+                                                    .ok();
+
+                                                action_tx.send(Action::SaveConversation).await.ok();
+                                                break 'outer;
                                             }
+
+                                            content_map.insert(id, data);
+                                            let content = content_map
+                                                .values()
+                                                .into_iter()
+                                                .map(|x| x.as_str())
+                                                .collect::<Vec<&str>>()
+                                                .join("");
+                                            action_tx
+                                                .send(Action::StreamMessage(
+                                                    recv_uuid,
+                                                    Message {
+                                                        role: MessageRole::Assistant,
+                                                        content,
+                                                        metadata: MessageMetadata {
+                                                            provider_id: message
+                                                                .clone()
+                                                                .metadata
+                                                                .provider_id,
+                                                            model_id: message
+                                                                .clone()
+                                                                .metadata
+                                                                .model_id,
+                                                            status: CompletionStatus::Processing,
+                                                        },
+                                                    },
+                                                ))
+                                                .await
+                                                .ok();
                                         }
                                     }
-                                    _ => {}
+                                    Err(err) => {
+                                        action_tx
+                                            .send(Action::StreamMessage(
+                                                recv_uuid,
+                                                Message {
+                                                    role: MessageRole::Assistant,
+                                                    content: err.to_string(),
+                                                    metadata: message.clone().metadata,
+                                                },
+                                            ))
+                                            .await
+                                            .ok();
+                                    }
                                 }
                             }
                         }

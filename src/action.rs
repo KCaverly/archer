@@ -1,3 +1,5 @@
+use archer::ai::completion::Message as CompletionMessage;
+use archer::ai::completion::{CompletionModelID, CompletionProviderID, CompletionStatus};
 use std::fmt;
 use uuid::Uuid;
 
@@ -6,10 +8,8 @@ use serde::{
     Deserialize, Serialize,
 };
 
-use crate::{
-    agent::{completion::CompletionModel, conversation::Conversation, message::Message},
-    mode::Mode,
-};
+use crate::mode::Mode;
+use archer::ai::conversation::Conversation;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Action {
@@ -22,9 +22,9 @@ pub enum Action {
     Refresh,
     Error(String),
     Help,
-    SendMessage(Message),
-    ReceiveMessage(Uuid, Message),
-    StreamMessage(Uuid, Message),
+    SendMessage(CompletionMessage),
+    ReceiveMessage(Uuid, CompletionMessage),
+    StreamMessage(Uuid, CompletionMessage),
     SelectNextMessage,
     SelectPreviousMessage,
     DeleteSelectedMessage,
@@ -34,7 +34,7 @@ pub enum Action {
     SwitchMode(Mode),
     SelectNextModel,
     SelectPreviousModel,
-    SwitchModel(CompletionModel),
+    SwitchModel(CompletionProviderID, CompletionModelID),
     SwitchToSelectedModel,
     SwitchKeymap(String),
     SelectPreviousConversation,
@@ -102,27 +102,6 @@ impl<'de> Deserialize<'de> for Action {
                                 Ok(Action::SwitchMode(Mode::ConversationManager))
                             }
                             _ => Err(E::custom(format!("invalid Action Variant: {:?}", mode))),
-                        }
-                    }
-                    data if data.starts_with("SwitchModel(") => {
-                        let model = data
-                            .trim_start_matches("SwitchModel(")
-                            .trim_end_matches(")");
-                        match model {
-                            "Yi34bChat" => Ok(Action::SwitchModel(CompletionModel::Yi34bChat)),
-                            "Llama2_7bChat" => {
-                                Ok(Action::SwitchModel(CompletionModel::Llama2_7bChat))
-                            }
-                            "Llama2_13bChat" => {
-                                Ok(Action::SwitchModel(CompletionModel::Llama2_13bChat))
-                            }
-                            "Llama2_70bChat" => {
-                                Ok(Action::SwitchModel(CompletionModel::Llama2_70bChat))
-                            }
-                            "Mistral7bInstructV01" => {
-                                Ok(Action::SwitchModel(CompletionModel::Mistral7bInstructV01))
-                            }
-                            _ => Err(E::custom(format!("invalid Action Variant: {:?}", model))),
                         }
                     }
 

@@ -8,13 +8,15 @@ use tokio::sync::mpsc::UnboundedSender;
 use tui_textarea::{Input, Key, TextArea};
 
 use super::Component;
-use crate::agent::completion::CompletionModel;
-use crate::agent::conversation::{Conversation, ConversationManager};
-use crate::agent::message::{Message, Role};
 use crate::config::{Config, KeyBindings};
 use crate::mode::Mode;
 use crate::styles::{ACTIVE_COLOR, FOCUSED_COLOR, UNFOCUSED_COLOR};
 use crate::{action::Action, tui::Frame};
+use archer::ai::completion::{CompletionModel, CompletionStatus, MessageMetadata};
+use archer::ai::completion::{Message, MessageRole};
+use archer::ai::conversation::{Conversation, ConversationManager};
+use archer::ai::providers::COMPLETION_PROVIDERS;
+
 use async_channel::Sender;
 
 #[derive(Default, Eq, PartialEq)]
@@ -25,12 +27,12 @@ enum InputState {
     Active,
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
     state: InputState,
-    active_model: CompletionModel,
+    active_model: Box<dyn CompletionModel>,
     keymap: String,
     textarea: TextArea<'a>,
 }
@@ -42,10 +44,15 @@ impl MessageInput<'static> {
         } else {
             InputState::Unfocused
         };
+        let default_provider = COMPLETION_PROVIDERS.default_provider().unwrap();
+        let default_model = default_provider.default_model();
         Self {
+            command_tx: None,
+            config: Config::default(),
             state,
             keymap,
-            ..Default::default()
+            active_model: default_model,
+            textarea: TextArea::default(),
         }
     }
 }
@@ -68,10 +75,13 @@ impl Component for MessageInput<'static> {
                     let content = self.textarea.lines().join("\n");
                     if content.len() > 0 {
                         let action = Action::SendMessage(Message {
-                            role: Role::User,
+                            role: MessageRole::User,
                             content,
-                            status: None,
-                            model: Some(self.active_model.clone()),
+                            metadata: MessageMetadata {
+                                provider_id: "replicate".to_string(),
+                                model_id: self.active_model.get_display_name(),
+                                status: CompletionStatus::Succeeded,
+                            },
                         });
                         self.textarea = TextArea::default();
                         return Ok(Some(action));
@@ -115,8 +125,12 @@ impl Component for MessageInput<'static> {
                     self.state = InputState::Active;
                 }
             },
-            Action::SwitchModel(model) => {
-                self.active_model = model;
+            Action::SwitchModel(provider_id, model_id) => {
+                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(provider_id) {
+                    if let Some(model) = provider.get_model(model_id) {
+                        self.active_model = model;
+                    }
+                }
             }
 
             _ => {}
@@ -131,12 +145,9 @@ impl Component for MessageInput<'static> {
         conversation: &Conversation,
         manager: &ConversationManager,
     ) -> Result<()> {
-        let (model_owner, model_name) = self.active_model.get_model_details();
+        let display_name = self.active_model.get_display_name();
         let block = Block::default()
-            .title(
-                Title::from(format!(" Message ({model_owner}/{model_name}) "))
-                    .alignment(Alignment::Left),
-            )
+            .title(Title::from(format!(" Message ({display_name}) ")).alignment(Alignment::Left))
             .title(
                 Title::from(self.keymap.clone())
                     .alignment(Alignment::Center)

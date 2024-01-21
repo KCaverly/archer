@@ -3,7 +3,6 @@
 #![allow(unused_variables)]
 
 pub mod action;
-pub mod agent;
 pub mod app;
 pub mod cli;
 pub mod components;
@@ -37,7 +36,7 @@ async fn tokio_main() -> Result<()> {
             app.run().await?;
         }
         Err(err) => {
-            eprintln!("{err}");
+            // eprintln!("{err}");
         }
     };
 

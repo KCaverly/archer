@@ -16,17 +16,16 @@ use ratatui::{prelude::*, widgets::*};
 use replicate_rs::predictions::PredictionStatus;
 
 use super::Component;
-use crate::agent::completion::create_prediction;
-use crate::agent::conversation::{Conversation, ConversationManager};
-use crate::agent::message::{Message, Role};
 use crate::mode::Mode;
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };
 use crate::{action::Action, tui::Frame};
+use archer::ai::conversation::{Conversation, ConversationManager};
 use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};
+use archer::ai::completion::{CompletionStatus, Message as CompletionMessage, MessageRole};
 
 lazy_static! {
     static ref WHITESPACE_RE: Regex = Regex::new(r"\s*[^\s]+").unwrap();
@@ -59,55 +58,50 @@ impl Viewer {
         }
     }
 
-    pub fn get_title_line<'a>(&self, message: &Message, width: usize) -> Line<'a> {
+    pub fn get_title_line<'a>(&self, message: &CompletionMessage, width: usize) -> Line<'a> {
         let mut title_spans = Vec::new();
         match message.role {
-            Role::System => title_spans.push((
+            MessageRole::System => title_spans.push((
                 " System".to_string(),
                 Style::default().fg(SYSTEM_COLOR).bold(),
             )),
-            Role::User => {
+            MessageRole::User => {
                 title_spans.push((" User".to_string(), Style::default().fg(USER_COLOR).bold()))
             }
-            Role::Assistant => {
+            MessageRole::Assistant => {
                 title_spans.push((
                     " Assistant".to_string(),
                     Style::default().fg(ASSISTANT_COLOR).bold(),
                 ));
 
-                if let Some(model) = &message.model {
-                    let (owner, model_name) = model.get_model_details();
-                    title_spans.push((
-                        format!(": ({owner}/{model_name})"),
-                        Style::default().fg(ASSISTANT_COLOR),
-                    ));
+                title_spans.push((
+                    format!(": {}", message.clone().metadata.model_id),
+                    Style::default().fg(ASSISTANT_COLOR),
+                ));
+
+                let (status_str, color) = match message.metadata.status {
+                    CompletionStatus::Starting => (" Starting...", Color::LightBlue),
+                    CompletionStatus::Processing => (" Processing...", Color::LightGreen),
+                    CompletionStatus::Succeeded => (" Succeeded", Color::LightGreen),
+                    CompletionStatus::Failed => (" Failed", Color::LightRed),
+                    CompletionStatus::Canceled => (" Canceled", Color::LightRed),
+                };
+
+                let total_span_chars: usize = title_spans
+                    .iter()
+                    .map(|(span, _)| span.len())
+                    .sum::<usize>()
+                    + status_str.len()
+                    + 3;
+
+                let pad_chars = width.max(total_span_chars) - total_span_chars;
+                let mut pad = String::new();
+                for _ in 0..pad_chars {
+                    pad.push(' ');
                 }
 
-                if let Some(status) = message.status.clone() {
-                    let (status_str, color) = match status {
-                        PredictionStatus::Starting => (" Starting...", Color::LightBlue),
-                        PredictionStatus::Processing => (" Processing...", Color::LightGreen),
-                        PredictionStatus::Succeeded => (" Succeeded", Color::LightGreen),
-                        PredictionStatus::Failed => (" Failed", Color::LightRed),
-                        PredictionStatus::Canceled => (" Canceled", Color::LightRed),
-                    };
-
-                    let total_span_chars: usize = title_spans
-                        .iter()
-                        .map(|(span, _)| span.len())
-                        .sum::<usize>()
-                        + status_str.len()
-                        + 3;
-
-                    let pad_chars = width.max(total_span_chars) - total_span_chars;
-                    let mut pad = String::new();
-                    for _ in 0..pad_chars {
-                        pad.push(' ');
-                    }
-
-                    title_spans.push((pad, Style::default()));
-                    title_spans.push((status_str.to_string(), Style::default().fg(color)));
-                }
+                title_spans.push((pad, Style::default()));
+                title_spans.push((status_str.to_string(), Style::default().fg(color)));
             }
         }
 
@@ -330,7 +324,7 @@ impl Component for Viewer {
 #[derive(Clone)]
 struct VisibleMessage<'a> {
     lines: Vec<Line<'a>>,
-    role: Role,
+    role: MessageRole,
     uuid: Uuid,
 }
 
@@ -441,7 +435,7 @@ impl<'a> VisibleMessages<'a> {
 
             let height = (message_len + border_height) as u16;
             let x = match message.role {
-                Role::Assistant => rect.width - width,
+                MessageRole::Assistant => rect.width - width,
                 _ => rect.x,
             };
 

@@ -1,3 +1,5 @@
+use archer::ai::completion::CompletionModel;
+use archer::ai::providers::COMPLETION_PROVIDERS;
 use color_eyre::eyre::Result;
 use futures::StreamExt;
 use ratatui::{prelude::*, widgets::*};
@@ -13,13 +15,11 @@ use textwrap::wrap_algorithms::{wrap_optimal_fit, Penalties};
 use textwrap::WordSeparator;
 
 use super::Component;
-use crate::agent::completion::CompletionModel;
-use crate::agent::conversation::{Conversation, ConversationManager};
-use crate::agent::message::{Message, Role};
 use crate::styles::{
     ACTIVE_COLOR, ASSISTANT_COLOR, FOCUSED_COLOR, SYSTEM_COLOR, UNFOCUSED_COLOR, USER_COLOR,
 };
 use crate::{action::Action, tui::Frame};
+use archer::ai::conversation::{Conversation, ConversationManager};
 use async_channel::Sender;
 
 use crate::config::{Config, KeyBindings};
@@ -29,14 +29,18 @@ pub struct ModelSelector {
     command_tx: Option<Sender<Action>>,
     config: Config,
     selected_model: usize,
-    models: Vec<CompletionModel>,
+    models: Vec<Box<dyn CompletionModel>>,
 }
 
 impl ModelSelector {
     pub fn new() -> Self {
+        let provider = COMPLETION_PROVIDERS
+            .get_provider("replicate".to_string())
+            .unwrap();
+        let models = provider.list_models();
         Self {
             selected_model: 0,
-            models: CompletionModel::iter().collect::<Vec<CompletionModel>>(),
+            models,
             ..Default::default()
         }
     }
@@ -53,8 +57,8 @@ impl ModelSelector {
         }
     }
 
-    fn get_selected_model(&mut self) -> CompletionModel {
-        self.models[self.selected_model]
+    fn get_selected_model(&mut self) -> String {
+        self.models[self.selected_model].get_display_name()
     }
 }
 
@@ -78,7 +82,7 @@ impl Component for ModelSelector {
                 let action_tx = self.command_tx.clone().unwrap();
                 tokio::spawn(async move {
                     action_tx
-                        .send(Action::SwitchModel(selected_model))
+                        .send(Action::SwitchModel("replicate".to_string(), selected_model))
                         .await
                         .ok();
                 });
@@ -96,10 +100,9 @@ impl Component for ModelSelector {
         manager: &ConversationManager,
     ) -> Result<()> {
         let mut items = Vec::new();
-        for model_variant in CompletionModel::iter() {
-            let (model_owner, model_name) = model_variant.get_model_details();
+        for model in &self.models {
             items.push(ListItem::new(Line::from(vec![Span::styled(
-                format!("{model_owner}/{model_name}"),
+                model.get_display_name(),
                 Style::default(),
             )])))
         }
