@@ -1,29 +1,22 @@
 mod replicate;
 mod together;
 
+use anyhow::anyhow;
 use replicate::Replicate;
 
 use crate::ai::providers::together::TogetherAI;
 
-use super::completion::{CompletionProvider, CompletionProviderID};
+use super::completion::{CompletionModel, CompletionProvider, CompletionProviderID};
+use super::config::ModelConfig;
 use std::collections::BTreeMap;
-
-pub const DEFAULT_COMPLETION_PROVIDER: &str = "TogetherAI";
 
 pub struct CompletionProviderLibrary {
     providers: BTreeMap<CompletionProviderID, Box<dyn CompletionProvider>>,
 }
 
 impl CompletionProviderLibrary {
-    pub fn get_provider(
-        &self,
-        provider_id: &CompletionProviderID,
-    ) -> Option<&Box<dyn CompletionProvider>> {
+    pub fn get_provider(&self, provider_id: &String) -> Option<&Box<dyn CompletionProvider>> {
         self.providers.get(provider_id)
-    }
-
-    pub fn default_provider(&self) -> Option<&Box<dyn CompletionProvider>> {
-        self.providers.get(&DEFAULT_COMPLETION_PROVIDER.to_string())
     }
 
     pub fn next_provider(&self, provider_id: &CompletionProviderID) -> CompletionProviderID {
@@ -51,4 +44,12 @@ lazy_static! {
 
         CompletionProviderLibrary { providers }
     };
+}
+
+pub fn get_model(model_config: &ModelConfig) -> anyhow::Result<Box<dyn CompletionModel>> {
+    if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&model_config.provider_id) {
+        return provider.get_model(model_config);
+    }
+
+    Err(anyhow!("model not found"))
 }

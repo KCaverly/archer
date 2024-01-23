@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::prompt::PromptTemplateVariant;
@@ -6,10 +6,11 @@ use super::prompt::PromptTemplateVariant;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub default_completion_model: ModelConfig,
+    pub default_title_model: ModelConfig,
     pub models: Vec<ModelConfig>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Eq, Serialize, PartialEq, Debug, Deserialize, Clone)]
 pub struct ModelConfig {
     pub provider_id: String,
     pub model_id: String,

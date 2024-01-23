@@ -11,19 +11,19 @@ pub trait PromptTemplate {
 }
 
 pub struct PromptResult {
-    prompt: String,
-    system_prompt: String,
-    prompt_template: String,
-    full_prompt: String,
+    pub prompt: String,
+    pub system_prompt: String,
+    pub prompt_template: String,
+    pub full_prompt: String,
 }
 
-#[derive(Debug)]
+#[derive(Serialize, PartialEq, Eq, Debug, Clone)]
 pub enum PromptTemplateVariant {
     ChatML,
 }
 
 impl PromptTemplateVariant {
-    fn get_template(&self) -> Box<dyn PromptTemplate> {
+    pub fn get_template(&self) -> Box<dyn PromptTemplate> {
         match self {
             PromptTemplateVariant::ChatML => Box::new(chatml::ChatMLTemplate::default()),
         }

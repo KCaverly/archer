@@ -1,5 +1,6 @@
 use archer::ai::completion::Message as CompletionMessage;
 use archer::ai::completion::{CompletionModelID, CompletionProviderID, CompletionStatus};
+use archer::ai::config::ModelConfig;
 use std::fmt;
 use uuid::Uuid;
 
@@ -34,7 +35,7 @@ pub enum Action {
     SwitchMode(Mode),
     SelectNextModel,
     SelectPreviousModel,
-    SwitchModel(CompletionProviderID, CompletionModelID),
+    SwitchModel(ModelConfig),
     SwitchToSelectedModel,
     SwitchKeymap(String),
     SelectPreviousConversation,

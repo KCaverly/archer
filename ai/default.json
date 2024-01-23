@@ -4,6 +4,11 @@
     "model_id": "DiscoResearch/DiscoLM-mixtral-8x7b-v2",
     "template": "ChatML"
   },
+  "default_title_model": {
+    "provider_id": "Replicate",
+    "model_id": "kcaverly/dolphin-2.5-mixtral-8x7b-gguf",
+    "template": "ChatML"
+  },
   "models": [
     {
       "provider_id": "TogetherAI",

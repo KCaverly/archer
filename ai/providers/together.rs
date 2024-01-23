@@ -1,7 +1,7 @@
 use crate::ai::completion::{
-    CompletionModel, CompletionModelID, CompletionProvider, CompletionResult, CompletionStatus,
-    Message, MessageRole,
+    CompletionModel, CompletionProvider, CompletionResult, CompletionStatus, Message,
 };
+use crate::ai::config::{ModelConfig, ARCHER_CONFIG};
 use anyhow::anyhow;
 use async_stream::stream;
 use async_trait::async_trait;
@@ -13,8 +13,6 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::env::var;
 use std::pin::Pin;
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
 #[derive(Default)]
 pub struct TogetherAI {
@@ -40,69 +38,33 @@ impl CompletionProvider for TogetherAI {
     fn has_credentials(&self) -> bool {
         self.api_key.is_some()
     }
-
-    fn list_models(&self) -> Vec<Box<dyn CompletionModel>> {
-        let mut models = Vec::<Box<dyn CompletionModel>>::new();
-        for model in TogetherCompletionModel::iter() {
-            let boxed_model = Box::new(model);
-            models.push(boxed_model)
+    fn get_model(&self, model_config: &ModelConfig) -> anyhow::Result<Box<dyn CompletionModel>> {
+        if model_config.provider_id == self.get_id() {
+            return anyhow::Ok(Box::new(TogetherCompletionModel::load(
+                model_config.clone(),
+            )));
         }
-
-        models
+        Err(anyhow!("model_config provider does not match provider"))
     }
 
     fn get_id(&self) -> String {
         "TogetherAI".to_string()
     }
-
-    fn default_model(&self) -> Box<dyn CompletionModel> {
-        Box::new(TogetherCompletionModel::DiscoLMMixtral8x7bv2)
-    }
-    fn get_model(&self, model_id: CompletionModelID) -> Option<Box<dyn CompletionModel>> {
-        for model in TogetherCompletionModel::iter() {
-            if model.get_display_name() == model_id {
-                return Some(Box::new(model));
-            }
-        }
-
-        None
-    }
 }
 
-#[derive(Default, EnumIter, Clone, Debug)]
-enum TogetherCompletionModel {
-    #[default]
-    DiscoLMMixtral8x7bv2,
+#[derive(Clone, Debug)]
+struct TogetherCompletionModel {
+    model_config: ModelConfig,
 }
 
 impl TogetherCompletionModel {
-    fn get_inputs(&self, messages: &Vec<Message>, stream: bool) -> serde_json::Value {
-        let mut system_prompt = "You are a helpful AI assistant, running in Archer a Terminal chat Interface built by kcaverly.".to_string();
-        let mut prompt = String::new();
-
-        for message in messages {
-            match message.role {
-                MessageRole::System => {
-                    system_prompt.push_str(message.content.as_str());
-                }
-                MessageRole::User => {
-                    prompt.push_str(
-                        format!("<|im_start|>user\n{}<|im_end|>\n", message.content.as_str())
-                            .as_str(),
-                    );
-                }
-                MessageRole::Assistant => {
-                    prompt.push_str(
-                        format!("<|im_start|>assistant\n{}<|im_end|>\n", message.content).as_str(),
-                    );
-                }
-            }
-        }
-
-        prompt.push_str("<|im_start|>assistant");
-
-        let full_prompt = format!("<|im_start|>system\n{system_prompt}<|im_end|>\n{prompt}");
-        json!({"prompt": full_prompt, "model": self.get_display_name(), "temperature": 0.7, "top_p": 0.7, "top_k": 50, "max_tokens": 2000, "stop": ["<|im_start|>"], "repetition_penalty": 1, "stream_tokens": stream})
+    pub fn load(model_config: ModelConfig) -> Self {
+        TogetherCompletionModel { model_config }
+    }
+    pub fn get_inputs(&self, messages: &Vec<Message>, stream: bool) -> serde_json::Value {
+        let template = self.model_config.template.get_template();
+        let prompt = template.generate_prompt(messages);
+        json!({"prompt": prompt.full_prompt, "model": self.model_config.model_id, "temperature": 0.7, "top_p": 0.7, "top_k": 50, "max_tokens": 2000, "stop": ["<|im_start|>"], "repetition_penalty": 1, "stream_tokens": stream})
     }
 }
 
@@ -155,14 +117,6 @@ impl CompletionModel for TogetherCompletionModel {
             }))
         } else {
             Err(anyhow!("togetherai api request failed"))
-        }
-    }
-
-    fn get_display_name(&self) -> String {
-        match self {
-            TogetherCompletionModel::DiscoLMMixtral8x7bv2 => {
-                "DiscoResearch/DiscoLM-mixtral-8x7b-v2".to_string()
-            }
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use archer::ai::config::{ModelConfig, ARCHER_CONFIG};
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::widgets::block::{Position, Title};
@@ -32,8 +33,7 @@ pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
     state: InputState,
-    provider_id: String,
-    active_model: Box<dyn CompletionModel>,
+    active_model: ModelConfig,
     keymap: String,
     textarea: TextArea<'a>,
 }
@@ -45,16 +45,15 @@ impl MessageInput<'static> {
         } else {
             InputState::Unfocused
         };
-        let default_provider = COMPLETION_PROVIDERS.default_provider().unwrap();
-        let default_model = default_provider.default_model();
+
+        let active_model = ARCHER_CONFIG.default_completion_model.clone();
 
         Self {
             command_tx: None,
             config: Config::default(),
             state,
             keymap,
-            provider_id: default_provider.get_id(),
-            active_model: default_model,
+            active_model,
             textarea: TextArea::default(),
         }
     }
@@ -84,8 +83,7 @@ impl Component for MessageInput<'static> {
                             role: MessageRole::User,
                             content,
                             metadata: MessageMetadata {
-                                provider_id: self.provider_id.clone(),
-                                model_id: self.active_model.get_display_name(),
+                                model_config: self.active_model.clone(),
                                 status: CompletionStatus::Succeeded,
                             },
                         });
@@ -131,13 +129,8 @@ impl Component for MessageInput<'static> {
                     self.state = InputState::Active;
                 }
             },
-            Action::SwitchModel(provider_id, model_id) => {
-                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&provider_id) {
-                    if let Some(model) = provider.get_model(model_id) {
-                        self.active_model = model;
-                        self.provider_id = provider_id;
-                    }
-                }
+            Action::SwitchModel(model_config) => {
+                self.active_model = model_config;
             }
 
             _ => {}
@@ -152,7 +145,7 @@ impl Component for MessageInput<'static> {
         conversation: &Conversation,
         manager: &ConversationManager,
     ) -> Result<()> {
-        let display_name = self.active_model.get_display_name();
+        let display_name = self.active_model.model_id.clone();
         let block = Block::default()
             .title(Title::from(format!(" Message ({display_name}) ")).alignment(Alignment::Left))
             .title(

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use archer::ai::completion::CompletionModel;
-use archer::ai::config::ARCHER_CONFIG;
-use archer::ai::providers::{COMPLETION_PROVIDERS, DEFAULT_COMPLETION_PROVIDER};
+use archer::ai::config::{ModelConfig, ARCHER_CONFIG};
+use archer::ai::providers::COMPLETION_PROVIDERS;
 use color_eyre::eyre::Result;
 use futures::StreamExt;
 use ratatui::{prelude::*, widgets::*};
@@ -34,21 +34,20 @@ pub struct ModelSelector {
     config: Config,
     selected_provider: CompletionProviderID,
     selected_model: HashMap<CompletionProviderID, usize>,
-    models: Vec<Box<dyn CompletionModel>>,
+    models: Vec<ModelConfig>,
 }
 
 impl ModelSelector {
     pub fn new() -> Self {
-        let provider = COMPLETION_PROVIDERS
-            .get_provider(&DEFAULT_COMPLETION_PROVIDER.to_string())
-            .unwrap();
+        let provider_id = ARCHER_CONFIG.default_completion_model.provider_id.clone();
+        let provider = COMPLETION_PROVIDERS.get_provider(&provider_id).unwrap();
         let mut selected_model = HashMap::<CompletionProviderID, usize>::new();
-        selected_model.insert(DEFAULT_COMPLETION_PROVIDER.to_string(), 0);
+        selected_model.insert(provider_id.clone(), 0);
         let models = provider.list_models();
         Self {
             selected_model,
             models,
-            selected_provider: DEFAULT_COMPLETION_PROVIDER.to_string(),
+            selected_provider: provider_id,
             ..Default::default()
         }
     }
@@ -68,9 +67,9 @@ impl ModelSelector {
         }
     }
 
-    fn get_selected_model_id(&self) -> anyhow::Result<CompletionModelID> {
+    fn get_selected_model_config(&self) -> anyhow::Result<ModelConfig> {
         if let Some(selected_model) = self.selected_model.get(&self.selected_provider) {
-            anyhow::Ok(self.models[*selected_model].get_display_name())
+            anyhow::Ok(self.models[*selected_model].clone())
         } else {
             Err(anyhow!("selected model not found"))
         }
@@ -102,12 +101,11 @@ impl Component for ModelSelector {
             Action::SelectNextModel => self.select_next_model(),
             Action::SelectPreviousModel => self.select_previous_model(),
             Action::SwitchToSelectedModel => {
-                let selected_model = self.get_selected_model_id()?;
-                let selected_provider = self.selected_provider.clone();
+                let selected_model = self.get_selected_model_config()?;
                 let action_tx = self.command_tx.clone().unwrap();
                 tokio::spawn(async move {
                     action_tx
-                        .send(Action::SwitchModel(selected_provider, selected_model))
+                        .send(Action::SwitchModel(selected_model))
                         .await
                         .ok();
                     action_tx
@@ -161,7 +159,7 @@ impl Component for ModelSelector {
         let mut items = Vec::new();
         for model in &self.models {
             items.push(ListItem::new(Line::from(vec![Span::styled(
-                model.get_display_name(),
+                model.model_id.clone(),
                 Style::default(),
             )])))
         }

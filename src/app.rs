@@ -1,10 +1,11 @@
 use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use archer::ai::{
     completion::{
-        CompletionModelID, CompletionProviderID, CompletionStatus, Message, MessageMetadata,
-        MessageRole,
+        CompletionModelID, CompletionProvider, CompletionProviderID, CompletionStatus, Message,
+        MessageMetadata, MessageRole,
     },
-    providers::COMPLETION_PROVIDERS,
+    config::ARCHER_CONFIG,
+    providers::{get_model, COMPLETION_PROVIDERS},
 };
 use std::sync::Arc;
 
@@ -125,11 +126,7 @@ impl App {
     }
 
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
-        let title_provider = "Replicate".to_string();
-        let title_model = COMPLETION_PROVIDERS
-            .get_provider(&"Replicate".to_string())
-            .unwrap()
-            .default_model();
+        let model_config = ARCHER_CONFIG.default_title_model.clone();
 
         let system_prompt = "You are a helpful assistant, who title user queries.";
         let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
@@ -149,8 +146,7 @@ User: {}
                 role: MessageRole::System,
                 content: system_prompt.to_string(),
                 metadata: MessageMetadata {
-                    provider_id: title_provider.clone(),
-                    model_id: title_model.get_display_name(),
+                    model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
                 },
             },
@@ -158,21 +154,22 @@ User: {}
                 role: MessageRole::User,
                 content: prompt.to_string(),
                 metadata: MessageMetadata {
-                    provider_id: title_provider,
-                    model_id: title_model.get_display_name(),
+                    model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
                 },
             },
         ];
 
         tokio::spawn(async move {
-            if let Some(Some(result)) = title_model
-                .get_completion(messages)
-                .await
-                .ok()
-                .map(|mut x| x.get_content().ok())
-            {
-                action_tx.send(Action::SetTitle(result)).await.ok();
+            if let Some(model) = get_model(&model_config).ok() {
+                if let Some(Some(result)) = model
+                    .get_completion(messages)
+                    .await
+                    .ok()
+                    .map(|mut x| x.get_content().ok())
+                {
+                    action_tx.send(Action::SetTitle(result)).await.ok();
+                }
             }
         });
     }
@@ -189,9 +186,11 @@ User: {}
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let first_message = self.conversation.messages.len() == 0;
         let provider = COMPLETION_PROVIDERS
-            .get_provider(&message.clone().metadata.provider_id)
+            .get_provider(&message.clone().metadata.model_config.provider_id)
             .unwrap();
-        let model = provider.get_model(message.clone().metadata.model_id);
+        let model = provider
+            .get_model(&message.clone().metadata.model_config)
+            .ok();
         let mut messages = self
             .conversation
             .messages
@@ -224,8 +223,7 @@ User: {}
                             role: MessageRole::Assistant,
                             content: "".to_string(),
                             metadata: MessageMetadata {
-                                provider_id: message.clone().metadata.provider_id,
-                                model_id: message.clone().metadata.model_id,
+                                model_config: message.metadata.model_config.clone(),
                                 status: CompletionStatus::Starting,
                             },
                         },
@@ -285,14 +283,9 @@ User: {}
                                                             role: MessageRole::Assistant,
                                                             content,
                                                             metadata: MessageMetadata {
-                                                                provider_id: message
-                                                                    .clone()
+                                                                model_config: message
                                                                     .metadata
-                                                                    .provider_id,
-                                                                model_id: message
-                                                                    .clone()
-                                                                    .metadata
-                                                                    .model_id,
+                                                                    .model_config,
                                                                 status: CompletionStatus::Succeeded,
                                                             },
                                                         },
@@ -318,14 +311,10 @@ User: {}
                                                         role: MessageRole::Assistant,
                                                         content,
                                                         metadata: MessageMetadata {
-                                                            provider_id: message
-                                                                .clone()
+                                                            model_config: message
                                                                 .metadata
-                                                                .provider_id,
-                                                            model_id: message
-                                                                .clone()
-                                                                .metadata
-                                                                .model_id,
+                                                                .model_config
+                                                                .clone(),
                                                             status: CompletionStatus::Processing,
                                                         },
                                                     },

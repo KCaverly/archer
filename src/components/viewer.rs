@@ -75,7 +75,7 @@ impl Viewer {
                 ));
 
                 title_spans.push((
-                    format!(": {}", message.clone().metadata.model_id),
+                    format!(": {}", message.clone().metadata.model_config.model_id),
                     Style::default().fg(ASSISTANT_COLOR),
                 ));
 

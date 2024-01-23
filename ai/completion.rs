@@ -8,6 +8,8 @@ use bytes::Bytes;
 use eventsource_stream::{EventStream, Eventsource};
 use futures_lite::StreamExt;
 
+use super::config::{ModelConfig, ARCHER_CONFIG};
+
 #[derive(Serialize, Clone, PartialEq, Eq, Debug, Deserialize)]
 pub enum MessageRole {
     System,
@@ -24,8 +26,7 @@ pub struct Message {
 
 #[derive(Clone, Serialize, Eq, PartialEq, Debug, Deserialize)]
 pub struct MessageMetadata {
-    pub provider_id: CompletionProviderID,
-    pub model_id: CompletionModelID,
+    pub model_config: ModelConfig,
     pub status: CompletionStatus,
 }
 
@@ -39,7 +40,6 @@ pub type CompletionProviderID = String;
 
 #[async_trait]
 pub trait CompletionModel: Sync + Send {
-    fn get_display_name(&self) -> String;
     async fn start_streaming(
         &self,
         messages: Vec<Message>,
@@ -55,9 +55,18 @@ pub trait CompletionProvider: Sync {
     where
         Self: Sized;
     fn has_credentials(&self) -> bool;
-    fn list_models(&self) -> Vec<Box<dyn CompletionModel>>;
-    fn default_model(&self) -> Box<dyn CompletionModel>;
-    fn get_model(&self, model_id: CompletionModelID) -> Option<Box<dyn CompletionModel>>;
+    fn list_models(&self) -> Vec<ModelConfig> {
+        let mut models = Vec::<ModelConfig>::new();
+        for model_config in &ARCHER_CONFIG.models {
+            if model_config.provider_id == self.get_id() {
+                models.push(model_config.clone());
+            }
+        }
+
+        models
+    }
+    fn get_model(&self, model_config: &ModelConfig) -> anyhow::Result<Box<dyn CompletionModel>>;
+
     fn get_id(&self) -> String;
 }
 
