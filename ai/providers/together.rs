@@ -1,7 +1,7 @@
 use crate::ai::completion::{
     CompletionModel, CompletionProvider, CompletionResult, CompletionStatus, Message,
 };
-use crate::ai::config::{ModelConfig, ARCHER_CONFIG};
+use crate::ai::config::{merge, ModelConfig, ARCHER_CONFIG};
 use anyhow::anyhow;
 use async_stream::stream;
 use async_trait::async_trait;
@@ -9,7 +9,7 @@ use eventsource_stream::Eventsource;
 use futures::Stream;
 use futures_lite::StreamExt;
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env::var;
 use std::pin::Pin;
@@ -64,7 +64,16 @@ impl TogetherCompletionModel {
     pub fn get_inputs(&self, messages: &Vec<Message>, stream: bool) -> serde_json::Value {
         let template = self.model_config.template.get_template();
         let prompt = template.generate_prompt(messages);
-        json!({"prompt": prompt.full_prompt, "model": self.model_config.model_id, "temperature": 0.7, "top_p": 0.7, "top_k": 50, "max_tokens": 2000, "stop": ["<|im_start|>"], "repetition_penalty": 1, "stream_tokens": stream})
+
+        let inputs = json!({"prompt": prompt.full_prompt, "model": self.model_config.model_id, "temperature": 0.7, "top_p": 0.7, "top_k": 50, "max_tokens": 2000, "repetition_penalty": 1, "stream_tokens": stream});
+
+        let inputs = if let Some(extra_args) = self.model_config.extra_args.clone() {
+            merge(&inputs, &extra_args)
+        } else {
+            inputs
+        };
+
+        inputs
     }
 }
 

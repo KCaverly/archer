@@ -1,4 +1,5 @@
 mod chatml;
+mod mistral;
 use super::completion::Message;
 use serde::{
     de::{self, Deserializer, Visitor},
@@ -20,12 +21,14 @@ pub struct PromptResult {
 #[derive(Serialize, PartialEq, Eq, Debug, Clone)]
 pub enum PromptTemplateVariant {
     ChatML,
+    Mistral,
 }
 
 impl PromptTemplateVariant {
     pub fn get_template(&self) -> Box<dyn PromptTemplate> {
         match self {
             PromptTemplateVariant::ChatML => Box::new(chatml::ChatMLTemplate::default()),
+            PromptTemplateVariant::Mistral => Box::new(mistral::MistralTemplate::default()),
         }
     }
 }
@@ -50,6 +53,7 @@ impl<'de> Deserialize<'de> for PromptTemplateVariant {
             {
                 match value {
                     "ChatML" => Ok(PromptTemplateVariant::ChatML),
+                    "Mistral" => Ok(PromptTemplateVariant::Mistral),
                     _ => Err(E::custom(format!(
                         "Unknown Prompt Template variant: {}",
                         value

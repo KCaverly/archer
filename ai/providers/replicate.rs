@@ -2,7 +2,7 @@ use crate::ai::completion::{
     CompletionModel, CompletionModelID, CompletionProvider, CompletionProviderID, CompletionResult,
     CompletionStatus, Message, MessageRole,
 };
-use crate::ai::config::ModelConfig;
+use crate::ai::config::{merge, ModelConfig};
 use anyhow::anyhow;
 use async_stream::stream;
 use async_trait::async_trait;
@@ -64,7 +64,15 @@ impl ReplicateCompletionModel {
     pub fn get_inputs(&self, messages: &Vec<Message>) -> serde_json::Value {
         let template = self.model_config.template.get_template();
         let prompt = template.generate_prompt(messages);
-        json!({"prompt": prompt.prompt, "system_prompt": prompt.system_prompt, "prompt_template": prompt.prompt_template})
+        let inputs = json!({"prompt": prompt.prompt, "system_prompt": prompt.system_prompt, "prompt_template": prompt.prompt_template});
+
+        let inputs = if let Some(extra_args) = self.model_config.extra_args.clone() {
+            merge(&inputs, &extra_args)
+        } else {
+            inputs
+        };
+
+        inputs
     }
 }
 
@@ -216,7 +224,7 @@ impl CompletionModel for ReplicateCompletionModel {
         let config = ReplicateConfig::new()?;
         let client = PredictionClient::from(config);
 
-        let mut prediction = client
+        let prediction = client
             .create(
                 model_details
                     .get(0)
