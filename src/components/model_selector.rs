@@ -146,7 +146,24 @@ impl Component for ModelSelector {
             ])
             .split(rect.inner(&Margin::new(1, 1)));
 
-        let paragraph = Paragraph::new(format!(" Provider: {} ", self.selected_provider)).block(
+        let provider_symbol =
+            if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&self.selected_provider) {
+                if provider.has_credentials() {
+                    "(API KEY Available)"
+                    // "✔️"
+                } else {
+                    "(API KEY Missing)"
+                    // "✖️"
+                }
+            } else {
+                "(API KEY Missing)"
+                // "✖️"
+            };
+        let paragraph = Paragraph::new(format!(
+            " Provider: {} {}",
+            self.selected_provider, provider_symbol
+        ))
+        .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)

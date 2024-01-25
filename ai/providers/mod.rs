@@ -39,8 +39,8 @@ impl CompletionProviderLibrary {
 lazy_static! {
     pub static ref COMPLETION_PROVIDERS: CompletionProviderLibrary = {
         let mut providers = BTreeMap::<CompletionProviderID, Box<dyn CompletionProvider>>::new();
-        providers.insert("TogetherAI".to_string(), Box::new(TogetherAI::default()));
-        providers.insert("Replicate".to_string(), Box::new(Replicate::default()));
+        providers.insert("TogetherAI".to_string(), Box::new(TogetherAI::load()));
+        providers.insert("Replicate".to_string(), Box::new(Replicate::load()));
 
         CompletionProviderLibrary { providers }
     };
