@@ -36,6 +36,81 @@
       }
     },
     {
+      "provider_id": "TogetherAI",
+      "model_id": "mistralai/Mistral-7B-Instruct-v0.2",
+      "template": "Mistral",
+      "extra_args": {
+        "stop": [
+          "</s>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO",
+      "template": "ChatML",
+      "extra_args": {
+        "stop": [
+          "<|im_start|>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT",
+      "template": "ChatML",
+      "extra_args": {
+        "stop": [
+          "<|im_start|>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "NousResearch/Nous-Hermes-2-Yi-34B",
+      "template": "ChatML",
+      "extra_args": {
+        "stop": [
+          "<|im_start|>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "NousResearch/Nous-Capybara-7B-V1p9",
+      "template": "ChatML",
+      "extra_args": {
+        "stop": [
+          "<|im_start|>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "teknium/OpenHermes-2p5-Mistral-7B",
+      "template": "ChatML",
+      "extra_args": {
+        "stop": [
+          "<|im_start|>"
+        ]
+      }
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "togethercomputer/llama-2-70b-chat",
+      "template": "Llama"
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "togethercomputer/llama-2-13b-chat",
+      "template": "Llama"
+    },
+    {
+      "provider_id": "TogetherAI",
+      "model_id": "togethercomputer/llama-2-7b-chat",
+      "template": "Llama"
+    },
+    {
       "provider_id": "Replicate",
       "model_id": "kcaverly/nous-hermes-2-yi-34b-gguf",
       "template": "ChatML"
