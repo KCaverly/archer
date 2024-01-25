@@ -33,43 +33,45 @@ pub struct ModelSelector {
     command_tx: Option<Sender<Action>>,
     config: Config,
     selected_provider: CompletionProviderID,
-    selected_model: HashMap<CompletionProviderID, usize>,
-    models: Vec<ModelConfig>,
+    selected_model: HashMap<CompletionProviderID, (usize, Vec<ModelConfig>)>,
 }
 
 impl ModelSelector {
     pub fn new() -> Self {
         let provider_id = ARCHER_CONFIG.default_completion_model.provider_id.clone();
         let provider = COMPLETION_PROVIDERS.get_provider(&provider_id).unwrap();
-        let mut selected_model = HashMap::<CompletionProviderID, usize>::new();
-        selected_model.insert(provider_id.clone(), 0);
+        let mut selected_model = HashMap::<CompletionProviderID, (usize, Vec<ModelConfig>)>::new();
         let models = provider.list_models();
+        selected_model.insert(provider_id.clone(), (0, models));
         Self {
             selected_model,
-            models,
             selected_provider: provider_id,
             ..Default::default()
         }
     }
     fn select_next_model(&mut self) {
-        if let Some(mut selected_model) = self.selected_model.get_mut(&self.selected_provider) {
-            if selected_model <= &mut self.models.len() {
-                *selected_model += 1 as usize;
+        if let Some((selected_idx, models)) = self.selected_model.get_mut(&self.selected_provider) {
+            if selected_idx < &mut (models.len() - 1) {
+                *selected_idx += 1;
             }
         }
     }
 
     fn select_previous_model(&mut self) {
-        if let Some(mut selected_model) = self.selected_model.get_mut(&self.selected_provider) {
-            if selected_model >= &mut (0 as usize) {
-                *selected_model -= 1;
+        if let Some((selected_idx, _)) = self.selected_model.get_mut(&self.selected_provider) {
+            if selected_idx > &mut (0 as usize) {
+                *selected_idx -= 1;
             }
         }
     }
 
     fn get_selected_model_config(&self) -> anyhow::Result<ModelConfig> {
-        if let Some(selected_model) = self.selected_model.get(&self.selected_provider) {
-            anyhow::Ok(self.models[*selected_model].clone())
+        if let Some(Some(model)) = self
+            .selected_model
+            .get(&self.selected_provider)
+            .map(|x| x.1.get(x.0))
+        {
+            anyhow::Ok(model.clone())
         } else {
             Err(anyhow!("selected model not found"))
         }
@@ -90,12 +92,15 @@ impl Component for ModelSelector {
     fn update(&mut self, action: Action) -> anyhow::Result<Option<Action>> {
         match action {
             Action::NextProvider => {
-                self.selected_provider =
-                    COMPLETION_PROVIDERS.next_provider(&self.selected_provider);
-                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&self.selected_provider) {
-                    self.models = provider.list_models();
-                    self.selected_model
-                        .insert(self.selected_provider.clone(), 0);
+                let next_provider = COMPLETION_PROVIDERS.next_provider(&self.selected_provider);
+                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&next_provider) {
+                    let models = provider.list_models();
+
+                    if !self.selected_model.contains_key(&next_provider) {
+                        self.selected_model
+                            .insert(next_provider.clone(), (0, models));
+                    }
+                    self.selected_provider = next_provider;
                 }
             }
             Action::SelectNextModel => self.select_next_model(),
@@ -146,19 +151,16 @@ impl Component for ModelSelector {
             ])
             .split(rect.inner(&Margin::new(1, 1)));
 
-        let provider_symbol =
-            if let Some(provider) = COMPLETION_PROVIDERS.get_provider(&self.selected_provider) {
-                if provider.has_credentials() {
-                    "(API KEY Available)"
-                    // "✔️"
-                } else {
-                    "(API KEY Missing)"
-                    // "✖️"
-                }
-            } else {
-                "(API KEY Missing)"
-                // "✖️"
-            };
+        let provider_symbol = if COMPLETION_PROVIDERS
+            .get_provider(&self.selected_provider)
+            .map(|x| x.has_credentials())
+            .unwrap_or(false)
+        {
+            "(API Key Available)"
+        } else {
+            "(API Key Missing)"
+        };
+
         let paragraph = Paragraph::new(format!(
             " Provider: {} {}",
             self.selected_provider, provider_symbol
@@ -174,7 +176,13 @@ impl Component for ModelSelector {
         f.render_widget(paragraph, vertical_panels[0]);
 
         let mut items = Vec::new();
-        for model in &self.models {
+
+        for model in self
+            .selected_model
+            .get(&self.selected_provider)
+            .map(|x| x.1.clone())
+            .unwrap_or(Vec::new())
+        {
             items.push(ListItem::new(Line::from(vec![Span::styled(
                 model.model_id.clone(),
                 Style::default(),
@@ -197,7 +205,7 @@ impl Component for ModelSelector {
             )
             .highlight_symbol("");
 
-        if let Some(selected_id) = self.selected_model.get(&self.selected_provider) {
+        if let Some((selected_id, _)) = self.selected_model.get(&self.selected_provider) {
             let mut list_state = ListState::default().with_selected(Some(*selected_id));
             f.render_stateful_widget(paragraph, vertical_panels[1], &mut list_state);
         }
