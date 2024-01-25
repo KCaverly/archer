@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use archer::ai::config::{ModelConfig, ARCHER_CONFIG};
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::widgets::block::{Position, Title};
@@ -32,7 +33,7 @@ pub struct MessageInput<'a> {
     command_tx: Option<Sender<Action>>,
     config: Config,
     state: InputState,
-    active_model: Box<dyn CompletionModel>,
+    active_model: ModelConfig,
     keymap: String,
     textarea: TextArea<'a>,
 }
@@ -44,31 +45,35 @@ impl MessageInput<'static> {
         } else {
             InputState::Unfocused
         };
-        let default_provider = COMPLETION_PROVIDERS.default_provider().unwrap();
-        let default_model = default_provider.default_model();
+
+        let active_model = ARCHER_CONFIG.default_completion_model.clone();
+
         Self {
             command_tx: None,
             config: Config::default(),
             state,
             keymap,
-            active_model: default_model,
+            active_model,
             textarea: TextArea::default(),
         }
     }
 }
 
 impl Component for MessageInput<'static> {
-    fn register_action_handler(&mut self, tx: Sender<Action>) -> Result<()> {
+    fn register_action_handler(&mut self, tx: Sender<Action>) -> anyhow::Result<()> {
         self.command_tx = Some(tx);
         Ok(())
     }
 
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
+    fn register_config_handler(&mut self, config: Config) -> anyhow::Result<()> {
         self.config = config;
         Ok(())
     }
 
-    fn handle_key_events(&mut self, key: crossterm::event::KeyEvent) -> Result<Option<Action>> {
+    fn handle_key_events(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> anyhow::Result<Option<Action>> {
         if self.state == InputState::Active {
             match key.code {
                 KeyCode::Enter => {
@@ -78,8 +83,7 @@ impl Component for MessageInput<'static> {
                             role: MessageRole::User,
                             content,
                             metadata: MessageMetadata {
-                                provider_id: "replicate".to_string(),
-                                model_id: self.active_model.get_display_name(),
+                                model_config: self.active_model.clone(),
                                 status: CompletionStatus::Succeeded,
                             },
                         });
@@ -109,7 +113,7 @@ impl Component for MessageInput<'static> {
         Ok(None)
     }
 
-    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+    fn update(&mut self, action: Action) -> anyhow::Result<Option<Action>> {
         match action {
             Action::SwitchKeymap(keymap) => {
                 self.keymap = keymap;
@@ -125,12 +129,8 @@ impl Component for MessageInput<'static> {
                     self.state = InputState::Active;
                 }
             },
-            Action::SwitchModel(provider_id, model_id) => {
-                if let Some(provider) = COMPLETION_PROVIDERS.get_provider(provider_id) {
-                    if let Some(model) = provider.get_model(model_id) {
-                        self.active_model = model;
-                    }
-                }
+            Action::SwitchModel(model_config) => {
+                self.active_model = model_config;
             }
 
             _ => {}
@@ -145,7 +145,7 @@ impl Component for MessageInput<'static> {
         conversation: &Conversation,
         manager: &ConversationManager,
     ) -> Result<()> {
-        let display_name = self.active_model.get_display_name();
+        let display_name = self.active_model.model_id.clone();
         let block = Block::default()
             .title(Title::from(format!(" Message ({display_name}) ")).alignment(Alignment::Left))
             .title(

@@ -1,10 +1,11 @@
 use arboard::{Clipboard, LinuxClipboardKind, SetExtLinux};
 use archer::ai::{
     completion::{
-        CompletionModelID, CompletionProviderID, CompletionStatus, Message, MessageMetadata,
-        MessageRole,
+        CompletionModelID, CompletionProvider, CompletionProviderID, CompletionStatus, Message,
+        MessageMetadata, MessageRole,
     },
-    providers::COMPLETION_PROVIDERS,
+    config::ARCHER_CONFIG,
+    providers::{get_model, COMPLETION_PROVIDERS},
 };
 use std::sync::Arc;
 
@@ -57,7 +58,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64) -> anyhow::Result<Self> {
         let conversation = Conversation::new();
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
@@ -125,32 +126,39 @@ impl App {
     }
 
     fn update_title(&mut self, action_tx: Sender<Action>, first_message: String) {
-        let title_provider = "replicate".to_string();
-        let title_model = COMPLETION_PROVIDERS
-            .get_provider("replicate".to_string())
-            .unwrap()
-            .default_model();
+        let model_config = ARCHER_CONFIG.default_title_model.clone();
 
         let system_prompt = "You are a helpful assistant, who title user queries.";
-        let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
+        let prompt = format!(
+            "Given a message, from the user, please produce a short title for the message.
 
-An example is as follows:
-User: Please walk me through the 3 hardest parts to learning rust
-Answer: Hard parts of learning rust
+For example if the user asked:
+What are the 3 hardest parts to learning rust.
 
-Please only provide the title and nothing else, keep the answer succinct, under 10 words preferably.
+You should respond with 'Hardest parts of Rust'
 
-The message to title is as follows:
-User: {}
-", first_message);
+Another example is, if the user asked:
+What is the most popular car color?
+
+You should response with 'White'
+
+Please do not respond with anything else except the title.
+
+The users message is:
+
+{}
+
+Please provide a title for the user message above.
+Please keep the answer succinct, less than ten words long.",
+            first_message
+        );
 
         let messages = vec![
             Message {
                 role: MessageRole::System,
                 content: system_prompt.to_string(),
                 metadata: MessageMetadata {
-                    provider_id: title_provider.clone(),
-                    model_id: title_model.get_display_name(),
+                    model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
                 },
             },
@@ -158,21 +166,24 @@ User: {}
                 role: MessageRole::User,
                 content: prompt.to_string(),
                 metadata: MessageMetadata {
-                    provider_id: title_provider,
-                    model_id: title_model.get_display_name(),
+                    model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
                 },
             },
         ];
 
         tokio::spawn(async move {
-            if let Some(Some(result)) = title_model
-                .get_completion(messages)
-                .await
-                .ok()
-                .map(|mut x| x.get_content().ok())
-            {
-                action_tx.send(Action::SetTitle(result)).await.ok();
+            if let Some(model) = get_model(&model_config).ok() {
+                if let Some(Some(mut result)) = model
+                    .get_completion(messages)
+                    .await
+                    .ok()
+                    .map(|mut x| x.get_content().ok())
+                {
+                    result = result.trim_matches('"').trim_end_matches('"').to_string();
+
+                    action_tx.send(Action::SetTitle(result)).await.ok();
+                }
             }
         });
     }
@@ -189,9 +200,11 @@ User: {}
     fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
         let first_message = self.conversation.messages.len() == 0;
         let provider = COMPLETION_PROVIDERS
-            .get_provider(message.clone().metadata.provider_id)
+            .get_provider(&message.clone().metadata.model_config.provider_id)
             .unwrap();
-        let model = provider.get_model(message.clone().metadata.model_id);
+        let model = provider
+            .get_model(&message.clone().metadata.model_config)
+            .ok();
         let mut messages = self
             .conversation
             .messages
@@ -224,8 +237,7 @@ User: {}
                             role: MessageRole::Assistant,
                             content: "".to_string(),
                             metadata: MessageMetadata {
-                                provider_id: message.clone().metadata.provider_id,
-                                model_id: message.clone().metadata.model_id,
+                                model_config: message.metadata.model_config.clone(),
                                 status: CompletionStatus::Starting,
                             },
                         },
@@ -285,14 +297,9 @@ User: {}
                                                             role: MessageRole::Assistant,
                                                             content,
                                                             metadata: MessageMetadata {
-                                                                provider_id: message
-                                                                    .clone()
+                                                                model_config: message
                                                                     .metadata
-                                                                    .provider_id,
-                                                                model_id: message
-                                                                    .clone()
-                                                                    .metadata
-                                                                    .model_id,
+                                                                    .model_config,
                                                                 status: CompletionStatus::Succeeded,
                                                             },
                                                         },
@@ -318,14 +325,10 @@ User: {}
                                                         role: MessageRole::Assistant,
                                                         content,
                                                         metadata: MessageMetadata {
-                                                            provider_id: message
-                                                                .clone()
+                                                            model_config: message
                                                                 .metadata
-                                                                .provider_id,
-                                                            model_id: message
-                                                                .clone()
-                                                                .metadata
-                                                                .model_id,
+                                                                .model_config
+                                                                .clone(),
                                                             status: CompletionStatus::Processing,
                                                         },
                                                     },
@@ -355,11 +358,12 @@ User: {}
                         todo!();
                     }
                 }
+            } else {
             }
         });
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub async fn run(&mut self) -> anyhow::Result<()> {
         let (action_tx, action_rx) = async_channel::unbounded();
 
         let mut tui = tui::Tui::new()?

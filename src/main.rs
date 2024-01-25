@@ -22,7 +22,7 @@ use crate::{
     utils::{initialize_logging, initialize_panic_handler, version},
 };
 
-async fn tokio_main() -> Result<()> {
+async fn tokio_main() -> anyhow::Result<()> {
     initialize_logging()?;
 
     initialize_panic_handler()?;
@@ -44,7 +44,7 @@ async fn tokio_main() -> Result<()> {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     if let Err(e) = tokio_main().await {
         eprintln!("{} error: Something went wrong", env!("CARGO_PKG_NAME"));
         Err(e)

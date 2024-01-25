@@ -1,5 +1,6 @@
 use archer::ai::completion::Message as CompletionMessage;
 use archer::ai::completion::{CompletionModelID, CompletionProviderID, CompletionStatus};
+use archer::ai::config::ModelConfig;
 use std::fmt;
 use uuid::Uuid;
 
@@ -34,7 +35,7 @@ pub enum Action {
     SwitchMode(Mode),
     SelectNextModel,
     SelectPreviousModel,
-    SwitchModel(CompletionProviderID, CompletionModelID),
+    SwitchModel(ModelConfig),
     SwitchToSelectedModel,
     SwitchKeymap(String),
     SelectPreviousConversation,
@@ -48,6 +49,7 @@ pub enum Action {
     UpdateTitle(String),
     ScrollUp,
     ScrollDown,
+    NextProvider,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -91,6 +93,7 @@ impl<'de> Deserialize<'de> for Action {
                     "NewConversation" => Ok(Action::NewConversation),
                     "ScrollUp" => Ok(Action::ScrollUp),
                     "ScrollDown" => Ok(Action::ScrollDown),
+                    "NextProvider" => Ok(Action::NextProvider),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {

@@ -50,6 +50,7 @@
         "<m>": "RevertMode",
         "<j>": "SelectNextModel",
         "<k>": "SelectPreviousModel",
+        "<TAB>": "NextProvider",
         "<enter>": "SwitchToSelectedModel",
       },
     "ConversationManager": {
