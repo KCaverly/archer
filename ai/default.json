@@ -1,8 +1,13 @@
 {
   "default_completion_model": {
     "provider_id": "TogetherAI",
-    "model_id": "DiscoResearch/DiscoLM-mixtral-8x7b-v2",
-    "template": "ChatML"
+    "model_id": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    "template": "Mistral",
+    "extra_args": {
+      "stop": [
+        "</s>"
+      ]
+    }
   },
   "default_title_model": {
     "provider_id": "TogetherAI",
