@@ -6,8 +6,13 @@
   },
   "default_title_model": {
     "provider_id": "Replicate",
-    "model_id": "kcaverly/dolphin-2.5-mixtral-8x7b-gguf",
-    "template": "ChatML"
+    "model_id": "meta/llama-2-7b-chat",
+    "template": "Llama",
+    "extra_args": {
+      "stop": [
+        "</s>"
+      ]
+    }
   },
   "models": [
     {
@@ -32,18 +37,38 @@
     },
     {
       "provider_id": "Replicate",
-      "model_id": "kcaverly/dolphin-2.5-mixtral-8x7b-gguf",
+      "model_id": "kcaverly/nous-hermes-2-yi-34b-gguf",
       "template": "ChatML"
     },
     {
       "provider_id": "Replicate",
-      "model_id": "kcaverly/dolphin-2.6-mixtral-8x7b-gguf",
+      "model_id": "kcaverly/neuralbeagle14-7b-gguf",
       "template": "ChatML"
     },
     {
       "provider_id": "Replicate",
-      "model_id": "kcaverly/dolphin-2.6-mixtral-8x7b-gguf",
+      "model_id": "01-ai/yi-34b-chat",
       "template": "ChatML"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "meta/llama-2-7b-chat",
+      "template": "Llama"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "meta/llama-2-70b-chat",
+      "template": "Llama"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "meta/llama-2-13b-chat",
+      "template": "Llama"
+    },
+    {
+      "provider_id": "Replicate",
+      "model_id": "meta/codellama-34b-instruct",
+      "template": "Llama"
     }
   ]
 }
