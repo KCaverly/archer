@@ -5,9 +5,9 @@
     "template": "ChatML"
   },
   "default_title_model": {
-    "provider_id": "Replicate",
-    "model_id": "meta/llama-2-7b-chat",
-    "template": "Llama",
+    "provider_id": "TogetherAI",
+    "model_id": "mistralai/Mistral-7B-Instruct-v0.2",
+    "template": "Mistral",
     "extra_args": {
       "stop": [
         "</s>"
@@ -21,7 +21,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },
@@ -51,7 +52,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },
@@ -61,7 +63,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },
@@ -71,7 +74,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },
@@ -81,7 +85,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },
@@ -91,7 +96,8 @@
       "template": "ChatML",
       "extra_args": {
         "stop": [
-          "<|im_start|>"
+          "<|im_start|>",
+          "<|im_end|>"
         ]
       }
     },

@@ -83,7 +83,38 @@ impl CompletionModel for TogetherCompletionModel {
         &self,
         messages: Vec<Message>,
     ) -> anyhow::Result<Box<dyn CompletionResult>> {
-        todo!();
+        let provider = TogetherAI::load();
+        let endpoint = format!("{}/inference", provider.base_url);
+        if let Some(api_key) = provider.api_key {
+            let body = self.get_inputs(&messages, false);
+            let client = reqwest::Client::new();
+            let result = client
+                .post(endpoint)
+                .header("Authorization", format!("Bearer {api_key}"))
+                .header("Content-Type", "application/json")
+                .body(body.to_string())
+                .send()
+                .await?;
+
+            let response: anyhow::Result<TogetherCompletionResponse> =
+                serde_json::from_str(result.text().await?.as_str()).map_err(|err| anyhow!(err));
+
+            let content = response?
+                .output
+                .choices
+                .get(0)
+                .ok_or(anyhow!("content not provided"))?
+                .text
+                .clone();
+
+            anyhow::Ok(Box::new(TogetherCompletionResult {
+                status: CompletionStatus::Processing,
+                stream: None,
+                content: Some(content),
+            }))
+        } else {
+            Err(anyhow!("failed to run"))
+        }
     }
 
     async fn start_streaming(
@@ -112,7 +143,7 @@ impl CompletionModel for TogetherCompletionModel {
                             yield (event.event, event.id, event.data);
 
                         }
-                        _ => todo!(),
+                        _ => {},
                     }
                 }
             };
@@ -122,7 +153,8 @@ impl CompletionModel for TogetherCompletionModel {
 
             anyhow::Ok(Box::new(TogetherCompletionResult {
                 status: CompletionStatus::Processing,
-                stream: boxed_stream,
+                stream: Some(boxed_stream),
+                content: None,
             }))
         } else {
             Err(anyhow!("togetherai api request failed"))
@@ -132,7 +164,8 @@ impl CompletionModel for TogetherCompletionModel {
 
 struct TogetherCompletionResult {
     status: CompletionStatus,
-    stream: Pin<Box<dyn Stream<Item = (String, String, String)> + Send + Sync>>,
+    stream: Option<Pin<Box<dyn Stream<Item = (String, String, String)> + Send + Sync>>>,
+    content: Option<String>,
 }
 
 #[async_trait]
@@ -145,9 +178,14 @@ impl CompletionResult for TogetherCompletionResult {
         &'a mut self,
     ) -> anyhow::Result<Pin<Box<dyn Stream<Item = (String, String, String)> + Send + Sync + 'a>>>
     {
+        if self.stream.is_none() {
+            return Err(anyhow!("stream it not available"));
+        }
+
         let stream = stream! {
+
             let mut id = 0;
-            while let Some(event) = self.stream.next().await {
+            while let Some(event) = self.stream.as_mut().unwrap().next().await {
 
                 let (event_str, _, data) = &event;
                 id += 1;
@@ -168,11 +206,28 @@ impl CompletionResult for TogetherCompletionResult {
         anyhow::Ok(Box::pin(stream))
     }
     fn get_content(&mut self) -> anyhow::Result<String> {
-        todo!();
+        self.content.clone().ok_or(anyhow!("content not available"))
     }
 }
 
 #[derive(Deserialize, Debug)]
 struct TogetherStreamingEvent {
     choices: Vec<HashMap<String, String>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct TogetherCompletionChoice {
+    finish_reason: String,
+    text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TogetherCompletionOutput {
+    choices: Vec<TogetherCompletionChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TogetherCompletionResponse {
+    status: String,
+    output: TogetherCompletionOutput,
 }

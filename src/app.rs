@@ -129,17 +129,29 @@ impl App {
         let model_config = ARCHER_CONFIG.default_title_model.clone();
 
         let system_prompt = "You are a helpful assistant, who title user queries.";
-        let prompt = format!("Given a message, from the user, you are required to produce a short title for the message.
+        let prompt = format!(
+            "Given a message, from the user, please produce a short title for the message.
 
-An example is as follows:
-User: Please walk me through the 3 hardest parts to learning rust
-Answer: Hard parts of learning rust
+For example if the user asked:
+What are the 3 hardest parts to learning rust.
 
-Please only provide the title and nothing else, keep the answer succinct, under 10 words preferably.
+You should respond with 'Hardest parts of Rust'
 
-The message to title is as follows:
-User: {}
-", first_message);
+Another example is, if the user asked:
+What is the most popular car color?
+
+You should response with 'White'
+
+Please do not respond with anything else except the title.
+
+The users message is:
+
+{}
+
+Please provide a title for the user message above.
+Please keep the answer succinct, less than ten words long.",
+            first_message
+        );
 
         let messages = vec![
             Message {
@@ -162,12 +174,14 @@ User: {}
 
         tokio::spawn(async move {
             if let Some(model) = get_model(&model_config).ok() {
-                if let Some(Some(result)) = model
+                if let Some(Some(mut result)) = model
                     .get_completion(messages)
                     .await
                     .ok()
                     .map(|mut x| x.get_content().ok())
                 {
+                    result = result.trim_matches('"').trim_end_matches('"').to_string();
+
                     action_tx.send(Action::SetTitle(result)).await.ok();
                 }
             }
