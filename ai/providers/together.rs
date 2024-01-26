@@ -65,8 +65,6 @@ impl TogetherCompletionModel {
         let template = self.model_config.template.get_template();
         let prompt = template.generate_prompt(messages);
 
-        println!("PROMPT: {:?}", prompt);
-
         let inputs = json!({"prompt": prompt.full_prompt, "model": self.model_config.model_id, "temperature": 0.7, "top_p": 0.7, "top_k": 50, "max_tokens": 2000, "repetition_penalty": 1, "stream_tokens": stream});
 
         let inputs = if let Some(extra_args) = self.model_config.extra_args.clone() {
