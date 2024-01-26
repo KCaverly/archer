@@ -229,6 +229,15 @@ impl Conversation {
         file_path
     }
 
+    pub fn has_no_user_messages(&self) -> bool {
+        for (_, message) in &self.messages {
+            if message.role == MessageRole::User {
+                return false;
+            }
+        }
+        return true;
+    }
+
     pub fn generate_message_id(&self) -> Uuid {
         Uuid::new_v4()
     }

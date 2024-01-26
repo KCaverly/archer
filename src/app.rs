@@ -198,7 +198,7 @@ Please keep the answer succinct, less than ten words long.",
     }
 
     fn send_message(&mut self, message: Message, profile: Profile, action_tx: Sender<Action>) {
-        let first_message = self.conversation.messages.len() == 0;
+        let first_message = self.conversation.has_no_user_messages();
         let provider = COMPLETION_PROVIDERS
             .get_provider(&message.clone().metadata.unwrap().model_config.provider_id)
             .unwrap();
