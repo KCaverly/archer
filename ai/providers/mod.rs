@@ -19,6 +19,23 @@ impl CompletionProviderLibrary {
         self.providers.get(provider_id)
     }
 
+    pub fn prev_provider(&self, provider_id: &CompletionProviderID) -> CompletionProviderID {
+        let mut prev = false;
+
+        for id in self.providers.keys().rev() {
+            if prev {
+                return id.clone();
+            }
+
+            if id == provider_id {
+                prev = true;
+            }
+        }
+
+        let last_provider = self.providers.keys().rev().next().clone().unwrap();
+        last_provider.clone()
+    }
+
     pub fn next_provider(&self, provider_id: &CompletionProviderID) -> CompletionProviderID {
         let mut next = false;
         for id in self.providers.keys() {

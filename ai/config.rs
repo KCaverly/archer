@@ -12,10 +12,10 @@ pub struct Config {
     pub profiles: Vec<Profile>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Serialize, Eq, PartialEq, Debug, Deserialize, Default, Clone)]
 pub struct Profile {
-    name: String,
-    system_prompt: String,
+    pub name: String,
+    pub system_prompt: String,
 }
 
 #[derive(Eq, Serialize, PartialEq, Debug, Deserialize, Clone)]

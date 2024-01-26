@@ -1,6 +1,6 @@
 use archer::ai::completion::Message as CompletionMessage;
 use archer::ai::completion::{CompletionModelID, CompletionProviderID, CompletionStatus};
-use archer::ai::config::ModelConfig;
+use archer::ai::config::{ModelConfig, Profile};
 use std::fmt;
 use uuid::Uuid;
 
@@ -23,7 +23,7 @@ pub enum Action {
     Refresh,
     Error(String),
     Help,
-    SendMessage(CompletionMessage),
+    SendMessage(CompletionMessage, Profile),
     ReceiveMessage(Uuid, CompletionMessage),
     StreamMessage(Uuid, CompletionMessage),
     SelectNextMessage,
@@ -33,11 +33,13 @@ pub enum Action {
     ToggleMaximized,
     RevertMode,
     SwitchMode(Mode),
-    SelectNextModel,
-    SelectPreviousModel,
+    SelectNextInConfigList,
+    SelectPreviousInConfigList,
     SwitchModel(ModelConfig),
-    SwitchToSelectedModel,
+    SwitchProfile(Profile),
+    SwitchToSelectedItem,
     SwitchKeymap(String),
+    NextTab,
     SelectPreviousConversation,
     SelectNextConversation,
     LoadSelectedConversation,
@@ -50,6 +52,7 @@ pub enum Action {
     ScrollUp,
     ScrollDown,
     NextProvider,
+    PrevProvider,
 }
 
 impl<'de> Deserialize<'de> for Action {
@@ -83,9 +86,9 @@ impl<'de> Deserialize<'de> for Action {
                     "DeleteSelectedMessage" => Ok(Action::DeleteSelectedMessage),
                     "CopySelectedMessage" => Ok(Action::CopySelectedMessage),
                     "RevertMode" => Ok(Action::RevertMode),
-                    "SelectPreviousModel" => Ok(Action::SelectPreviousModel),
-                    "SelectNextModel" => Ok(Action::SelectNextModel),
-                    "SwitchToSelectedModel" => Ok(Action::SwitchToSelectedModel),
+                    "SwitchToSelectedItem" => Ok(Action::SwitchToSelectedItem),
+                    "SelectPreviousInConfigList" => Ok(Action::SelectPreviousInConfigList),
+                    "SelectNextInConfigList" => Ok(Action::SelectNextInConfigList),
                     "SelectPreviousConversation" => Ok(Action::SelectPreviousConversation),
                     "SelectNextConversation" => Ok(Action::SelectNextConversation),
                     "LoadSelectedConversation" => Ok(Action::LoadSelectedConversation),
@@ -94,6 +97,8 @@ impl<'de> Deserialize<'de> for Action {
                     "ScrollUp" => Ok(Action::ScrollUp),
                     "ScrollDown" => Ok(Action::ScrollDown),
                     "NextProvider" => Ok(Action::NextProvider),
+                    "PrevProvider" => Ok(Action::PrevProvider),
+                    "NextTab" => Ok(Action::NextTab),
                     data if data.starts_with("SwitchMode(") => {
                         let mode = data.trim_start_matches("SwitchMode(").trim_end_matches(")");
                         match mode {

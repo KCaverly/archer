@@ -11,6 +11,9 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use super::completion::MessageRole;
+use super::config::{Profile, ARCHER_CONFIG};
+
 pub const CONVERSATION_DIR: &str = ".archer/conversations/";
 
 fn get_conversation_dir() -> PathBuf {
@@ -200,16 +203,24 @@ pub struct Conversation {
     pub messages: IndexMap<Uuid, Message>,
     pub selected_message: Option<usize>,
     pub title: Option<String>,
+    pub profile: Profile,
+    pub profile_messages: Vec<Uuid>,
 }
 
 impl Conversation {
     pub fn new() -> Self {
-        Conversation {
+        let profile = ARCHER_CONFIG.profiles.get(0).unwrap().clone();
+        let mut convo = Conversation {
             id: Uuid::now_v7(),
             messages: IndexMap::<Uuid, Message>::new(),
             selected_message: None,
             title: None,
-        }
+            profile: profile.clone(),
+            profile_messages: Vec::new(),
+        };
+
+        convo.set_profile(profile);
+        convo
     }
     pub fn get_file_path(&self) -> PathBuf {
         let conversation_dir = get_conversation_dir();
@@ -220,6 +231,26 @@ impl Conversation {
 
     pub fn generate_message_id(&self) -> Uuid {
         Uuid::new_v4()
+    }
+
+    pub fn set_profile(&mut self, profile: Profile) {
+        self.profile = profile.clone();
+
+        // Remove Existing Profile Messages
+        for message_uuid in &self.profile_messages {
+            self.messages.shift_remove(message_uuid);
+        }
+
+        let profile_uuid = self.generate_message_id();
+        self.profile_messages.push(profile_uuid);
+        self.add_message(
+            profile_uuid,
+            Message {
+                role: MessageRole::System,
+                content: profile.system_prompt.clone(),
+                metadata: None,
+            },
+        );
     }
 
     pub fn add_message(&mut self, id: Uuid, message: Message) {
