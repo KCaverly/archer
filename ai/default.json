@@ -19,6 +19,12 @@
       ]
     }
   },
+  "profiles": [
+    {
+      "name": "Default",
+      "system_prompt": "You are a helpful AI assistant, running in Archer, a terminal assistant built by kcaverly."
+    }
+  ],
   "models": [
     {
       "provider_id": "TogetherAI",
