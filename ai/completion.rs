@@ -21,7 +21,7 @@ pub enum MessageRole {
 pub struct Message {
     pub role: MessageRole,
     pub content: String,
-    pub metadata: MessageMetadata,
+    pub metadata: Option<MessageMetadata>,
 }
 
 #[derive(Clone, Serialize, Eq, PartialEq, Debug, Deserialize)]

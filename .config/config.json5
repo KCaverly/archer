@@ -48,10 +48,12 @@
         
         // Action Keybindings
         "<m>": "RevertMode",
-        "<j>": "SelectNextModel",
-        "<k>": "SelectPreviousModel",
-        "<TAB>": "NextProvider",
-        "<enter>": "SwitchToSelectedModel",
+        "<j>": "SelectNextInConfigList",
+        "<k>": "SelectPreviousInConfigList",
+        "<TAB>": "NextTab",
+        "<l>": "NextProvider",
+        "<h>": "PrevProvider",
+        "<enter>": "SwitchToSelectedItem",
       },
     "ConversationManager": {
         // Universal Keybindings

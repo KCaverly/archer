@@ -12,6 +12,7 @@ pub trait PromptTemplate {
     fn generate_prompt(&self, messages: &Vec<Message>) -> PromptResult;
 }
 
+#[derive(Debug)]
 pub struct PromptResult {
     pub prompt: String,
     pub system_prompt: String,

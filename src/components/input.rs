@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use archer::ai::config::{ModelConfig, ARCHER_CONFIG};
+use archer::ai::config::{ModelConfig, Profile, ARCHER_CONFIG};
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, ModifierKeyCode};
 use ratatui::widgets::block::{Position, Title};
@@ -34,6 +34,7 @@ pub struct MessageInput<'a> {
     config: Config,
     state: InputState,
     active_model: ModelConfig,
+    active_profile: Profile,
     keymap: String,
     textarea: TextArea<'a>,
 }
@@ -47,6 +48,7 @@ impl MessageInput<'static> {
         };
 
         let active_model = ARCHER_CONFIG.default_completion_model.clone();
+        let active_profile = ARCHER_CONFIG.profiles.get(0).unwrap().clone();
 
         Self {
             command_tx: None,
@@ -54,6 +56,7 @@ impl MessageInput<'static> {
             state,
             keymap,
             active_model,
+            active_profile,
             textarea: TextArea::default(),
         }
     }
@@ -79,14 +82,17 @@ impl Component for MessageInput<'static> {
                 KeyCode::Enter => {
                     let content = self.textarea.lines().join("\n");
                     if content.len() > 0 {
-                        let action = Action::SendMessage(Message {
-                            role: MessageRole::User,
-                            content,
-                            metadata: MessageMetadata {
-                                model_config: self.active_model.clone(),
-                                status: CompletionStatus::Succeeded,
+                        let action = Action::SendMessage(
+                            Message {
+                                role: MessageRole::User,
+                                content,
+                                metadata: Some(MessageMetadata {
+                                    model_config: self.active_model.clone(),
+                                    status: CompletionStatus::Succeeded,
+                                }),
                             },
-                        });
+                            self.active_profile.clone(),
+                        );
                         self.textarea = TextArea::default();
                         return Ok(Some(action));
                     }
@@ -132,6 +138,9 @@ impl Component for MessageInput<'static> {
             Action::SwitchModel(model_config) => {
                 self.active_model = model_config;
             }
+            Action::SwitchProfile(profile) => {
+                self.active_profile = profile;
+            }
 
             _ => {}
         }
@@ -146,8 +155,12 @@ impl Component for MessageInput<'static> {
         manager: &ConversationManager,
     ) -> Result<()> {
         let display_name = self.active_model.model_id.clone();
+        let profile_name = self.active_profile.name.clone();
         let block = Block::default()
-            .title(Title::from(format!(" Message ({display_name}) ")).alignment(Alignment::Left))
+            .title(
+                Title::from(format!(" Message ({profile_name}: {display_name}) "))
+                    .alignment(Alignment::Left),
+            )
             .title(
                 Title::from(self.keymap.clone())
                     .alignment(Alignment::Center)

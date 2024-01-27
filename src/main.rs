@@ -29,16 +29,10 @@ async fn tokio_main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
 
-    let config = ReplicateConfig::new();
-    match config {
-        Ok(..) => {
-            let mut app = App::new(args.tick_rate, args.frame_rate)?;
-            app.run().await?;
-        }
-        Err(err) => {
-            // eprintln!("{err}");
-        }
-    };
+    if std::env::var("REPLICATE_API_KEY").is_ok() || std::env::var("TOGETHER_API_KEY").is_ok() {
+        let mut app = App::new(args.tick_rate, args.frame_rate)?;
+        app.run().await?;
+    }
 
     Ok(())
 }
