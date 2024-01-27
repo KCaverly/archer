@@ -9,6 +9,13 @@ pub struct Config {
     pub default_completion_model: ModelConfig,
     pub default_title_model: ModelConfig,
     pub models: Vec<ModelConfig>,
+    pub profiles: Vec<Profile>,
+}
+
+#[derive(Serialize, Eq, PartialEq, Debug, Deserialize, Default, Clone)]
+pub struct Profile {
+    pub name: String,
+    pub system_prompt: String,
 }
 
 #[derive(Eq, Serialize, PartialEq, Debug, Deserialize, Clone)]

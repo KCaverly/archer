@@ -1,11 +1,12 @@
 {
   "default_completion_model": {
     "provider_id": "TogetherAI",
-    "model_id": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "template": "Mistral",
+    "model_id": "NousResearch/Nous-Hermes-2-Yi-34B",
+    "template": "ChatML",
     "extra_args": {
       "stop": [
-        "</s>"
+        "<|im_start|>",
+        "<|im_end|>"
       ]
     }
   },
@@ -19,6 +20,16 @@
       ]
     }
   },
+  "profiles": [
+    {
+      "name": "Default",
+      "system_prompt": "You are a helpful AI assistant, running in Archer, a terminal assistant built by kcaverly."
+    },
+    {
+      "name": "Probing Questions",
+      "system_prompt": "You are a helpful AI assistant, focused on providing the user with deep and probing questions, to help the user understand themselves and bring mental clarity. Whenever possible, allow the user to come to conclusions and figure out the answer for themselves. Avoid judgement, show empathy, and only ask one question at a time. If the user has reached a certain level of depth, do not repeat yourself, instead pivot the conversation to a slightly related but different concept. Every once and a while, feel free to clarify or summarize what you are hearing from the user."
+    }
+  ],
   "models": [
     {
       "provider_id": "TogetherAI",

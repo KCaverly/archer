@@ -75,11 +75,14 @@ impl Viewer {
                 ));
 
                 title_spans.push((
-                    format!(": {}", message.clone().metadata.model_config.model_id),
+                    format!(
+                        ": {}",
+                        message.clone().metadata.unwrap().model_config.model_id
+                    ),
                     Style::default().fg(ASSISTANT_COLOR),
                 ));
 
-                let (status_str, color) = match message.metadata.status {
+                let (status_str, color) = match message.metadata.as_ref().unwrap().status {
                     CompletionStatus::Starting => (" Starting...", Color::LightBlue),
                     CompletionStatus::Processing => (" Processing...", Color::LightGreen),
                     CompletionStatus::Succeeded => (" Succeeded", Color::LightGreen),
@@ -156,6 +159,10 @@ impl Viewer {
     ) -> VisibleMessages {
         let mut messages = Vec::new();
         for (id, message) in &conversation.messages {
+            if message.role == MessageRole::System {
+                continue;
+            }
+
             let mut lines = vec![self.get_title_line(&message, width)];
             let content = message.content.trim();
             lines.extend(self.get_lines_from_content(content, width));
@@ -258,8 +265,8 @@ impl Component for Viewer {
                     })
                     .bg(Color::Black),
             );
-        f.render_widget(block.clone(), rect);
 
+        f.render_widget(block.clone(), rect);
         let inner = rect.inner(&Margin {
             vertical: 1,
             horizontal: 1,

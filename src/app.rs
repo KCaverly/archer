@@ -4,7 +4,7 @@ use archer::ai::{
         CompletionModelID, CompletionProvider, CompletionProviderID, CompletionStatus, Message,
         MessageMetadata, MessageRole,
     },
-    config::ARCHER_CONFIG,
+    config::{Profile, ARCHER_CONFIG},
     providers::{get_model, COMPLETION_PROVIDERS},
 };
 use std::sync::Arc;
@@ -55,11 +55,13 @@ pub struct App {
     pub keymap: String,
     pub conversation: Conversation,
     pub manager: ConversationManager,
+    pub active_profile: Profile,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> anyhow::Result<Self> {
-        let conversation = Conversation::new();
+        let profile = ARCHER_CONFIG.profiles.get(0).unwrap();
+        let conversation = Conversation::new(profile.clone());
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
 
@@ -91,6 +93,7 @@ impl App {
             keymap,
             conversation,
             manager: conversation_manager,
+            active_profile: profile.clone(),
         })
     }
 
@@ -157,18 +160,18 @@ Please keep the answer succinct, less than ten words long.",
             Message {
                 role: MessageRole::System,
                 content: system_prompt.to_string(),
-                metadata: MessageMetadata {
+                metadata: Some(MessageMetadata {
                     model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
-                },
+                }),
             },
             Message {
                 role: MessageRole::User,
                 content: prompt.to_string(),
-                metadata: MessageMetadata {
+                metadata: Some(MessageMetadata {
                     model_config: model_config.clone(),
                     status: CompletionStatus::Succeeded,
-                },
+                }),
             },
         ];
 
@@ -193,17 +196,17 @@ Please keep the answer succinct, less than ten words long.",
     }
 
     fn new_conversation(&mut self) {
-        let convo = Conversation::new();
+        let convo = Conversation::new(self.active_profile.clone());
         self.conversation = convo;
     }
 
-    fn send_message(&mut self, message: Message, action_tx: Sender<Action>) {
-        let first_message = self.conversation.messages.len() == 0;
+    fn send_message(&mut self, message: Message, profile: Profile, action_tx: Sender<Action>) {
+        let first_message = self.conversation.has_no_user_messages();
         let provider = COMPLETION_PROVIDERS
-            .get_provider(&message.clone().metadata.model_config.provider_id)
+            .get_provider(&message.clone().metadata.unwrap().model_config.provider_id)
             .unwrap();
         let model = provider
-            .get_model(&message.clone().metadata.model_config)
+            .get_model(&message.clone().metadata.unwrap().model_config)
             .ok();
         let mut messages = self
             .conversation
@@ -236,10 +239,15 @@ Please keep the answer succinct, less than ten words long.",
                         Message {
                             role: MessageRole::Assistant,
                             content: "".to_string(),
-                            metadata: MessageMetadata {
-                                model_config: message.metadata.model_config.clone(),
+                            metadata: Some(MessageMetadata {
+                                model_config: message
+                                    .metadata
+                                    .as_ref()
+                                    .unwrap()
+                                    .model_config
+                                    .clone(),
                                 status: CompletionStatus::Starting,
-                            },
+                            }),
                         },
                     ))
                     .await
@@ -296,12 +304,14 @@ Please keep the answer succinct, less than ten words long.",
                                                         Message {
                                                             role: MessageRole::Assistant,
                                                             content,
-                                                            metadata: MessageMetadata {
+                                                            metadata: Some(MessageMetadata {
                                                                 model_config: message
                                                                     .metadata
+                                                                    .clone()
+                                                                    .unwrap()
                                                                     .model_config,
                                                                 status: CompletionStatus::Succeeded,
-                                                            },
+                                                            }),
                                                         },
                                                     ))
                                                     .await
@@ -324,13 +334,15 @@ Please keep the answer succinct, less than ten words long.",
                                                     Message {
                                                         role: MessageRole::Assistant,
                                                         content,
-                                                        metadata: MessageMetadata {
+                                                        metadata: Some(MessageMetadata {
                                                             model_config: message
                                                                 .metadata
+                                                                .as_ref()
+                                                                .unwrap()
                                                                 .model_config
                                                                 .clone(),
                                                             status: CompletionStatus::Processing,
-                                                        },
+                                                        }),
                                                     },
                                                 ))
                                                 .await
@@ -430,7 +442,9 @@ Please keep the answer succinct, less than ten words long.",
                     Action::Suspend => self.should_suspend = true,
                     Action::Resume => self.should_suspend = false,
                     Action::NewConversation => self.new_conversation(),
-                    Action::SendMessage(message) => self.send_message(message, action_tx.clone()),
+                    Action::SendMessage(message, profile) => {
+                        self.send_message(message, profile, action_tx.clone())
+                    }
                     Action::ReceiveMessage(uuid, message) => self.receive_message(uuid, message),
                     Action::StreamMessage(uuid, message) => self.stream_message(uuid, message),
                     Action::SelectNextMessage => self.conversation.select_next_message(),
@@ -694,6 +708,10 @@ Please keep the answer succinct, less than ten words long.",
                             .send(Action::SwitchMode(self.last_mode))
                             .await
                             .ok();
+                    }
+                    Action::SwitchProfile(profile) => {
+                        self.active_profile = profile.clone();
+                        self.conversation.set_profile(profile);
                     }
                     Action::SwitchMode(mode) => {
                         self.set_mode(mode);
