@@ -83,7 +83,8 @@ impl ConversationManager {
 
     pub fn new_conversation(&mut self) -> Conversation {
         let id = Uuid::now_v7();
-        let convo = Conversation::new();
+        let profile = ARCHER_CONFIG.profiles.get(0).unwrap().clone();
+        let convo = Conversation::new(profile);
 
         let metadata = ConversationMetadata {
             path: convo.get_file_path(),
@@ -208,8 +209,7 @@ pub struct Conversation {
 }
 
 impl Conversation {
-    pub fn new() -> Self {
-        let profile = ARCHER_CONFIG.profiles.get(0).unwrap().clone();
+    pub fn new(profile: Profile) -> Self {
         let mut convo = Conversation {
             id: Uuid::now_v7(),
             messages: IndexMap::<Uuid, Message>::new(),

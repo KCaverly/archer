@@ -55,11 +55,13 @@ pub struct App {
     pub keymap: String,
     pub conversation: Conversation,
     pub manager: ConversationManager,
+    pub active_profile: Profile,
 }
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> anyhow::Result<Self> {
-        let conversation = Conversation::new();
+        let profile = ARCHER_CONFIG.profiles.get(0).unwrap();
+        let conversation = Conversation::new(profile.clone());
         let keymap =
             " i: insert; k: focus viewer; m: change model; c: change convo; q: quit; ".to_string();
 
@@ -91,6 +93,7 @@ impl App {
             keymap,
             conversation,
             manager: conversation_manager,
+            active_profile: profile.clone(),
         })
     }
 
@@ -193,7 +196,7 @@ Please keep the answer succinct, less than ten words long.",
     }
 
     fn new_conversation(&mut self) {
-        let convo = Conversation::new();
+        let convo = Conversation::new(self.active_profile.clone());
         self.conversation = convo;
     }
 
@@ -706,7 +709,10 @@ Please keep the answer succinct, less than ten words long.",
                             .await
                             .ok();
                     }
-                    Action::SwitchProfile(profile) => self.conversation.set_profile(profile),
+                    Action::SwitchProfile(profile) => {
+                        self.active_profile = profile.clone();
+                        self.conversation.set_profile(profile);
+                    }
                     Action::SwitchMode(mode) => {
                         self.set_mode(mode);
                         action_tx
